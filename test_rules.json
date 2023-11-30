@@ -1,0 +1,23 @@
+{
+    "start_symbol": 0,
+    "prod_rules": [
+        {
+            "From" : 0,
+            "To": [3, 4]
+        },
+        {
+            "From": 3,
+            "To": [0, 0]
+        }
+    ],
+    "term_rules": [
+        {
+            "From": 3,
+            "To": "a"
+        },
+        {
+            "From": 4,
+            "To": "b"
+        }
+    ]
+}
