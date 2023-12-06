@@ -1,4 +1,5 @@
 import random
+import ruleset
 
 # random.seed(0) # Set the seed in real generation for reproducibility
 def generate_random_sequence(grammar, symbol):
@@ -43,12 +44,8 @@ def cyk_parse(sequence, grammar):
 
 def main():
     # Define your grammar in CNF
-    cnf_grammar = {
-        'S': ['AB', 'BC'],
-        'A': ['BA', 'a'],
-        'B': ['CC', 'b'],
-        'C': ['AB', 'a']
-    }
+    cnf_grammar = ruleset.Ruleset()
+    cnf_grammar.load("test_rules.json")
     # cnf_grammar = {
     #     'S': ["AE","BF"],
     #     'G': ["GG","a","b","AB"],
@@ -58,20 +55,15 @@ def main():
     #     'B': ["b"]
     # }
 
-    # Set the start symbol
-    start_symbol = 'S'
-
-    # Define valid symbols
-    valid_symbols = 'abc'
 
     # Generate a random valid sequence
-    random_sequence = generate_random_sequence(cnf_grammar, start_symbol)
+    random_sequence = generate_random_sequence(cnf_grammar.rules, cnf_grammar.start_symbol)
     print(f"Random Valid Sequence: {random_sequence}")
 
    # Generate a random invalid sequence
-    invalid_sequence = generate_invalid_sequence(valid_symbols, len(random_sequence))
-    while cyk_parse(invalid_sequence, cnf_grammar):
-        invalid_sequence = generate_invalid_sequence(valid_symbols, len(random_sequence))
+    invalid_sequence = generate_invalid_sequence(cnf_grammar.symbols, len(random_sequence))
+    while cyk_parse(invalid_sequence, cnf_grammar.rules):    
+        invalid_sequence = generate_invalid_sequence(cnf_grammar.symbols, len(random_sequence))
     
     print(f"Random Invalid Sequence: {invalid_sequence}")
 
