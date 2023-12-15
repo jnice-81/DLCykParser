@@ -1,17 +1,24 @@
 import random
 import ruleset
+import json
+import sys
 
+
+sys.setrecursionlimit(2000)
 # random.seed(0) # Set the seed in real generation for reproducibility
-def generate_random_sequence(grammar, symbol):
+def generate_random_sequence(grammar, symbol, max_depth, depth = 0):
     if symbol in grammar:  # Check if the symbol is in the grammar
-        production = random.choice(grammar[symbol])
-        return ''.join(generate_random_sequence(grammar, s) for s in production)
+        production = None
+        if depth >= max_depth:
+            for p in grammar[symbol]:
+                if not isinstance(p, list):
+                    production = p
+                    break
+        if production is None:
+            production = random.choice(grammar[symbol])
+        return ''.join(generate_random_sequence(grammar, s, max_depth, depth+1) for s in production)
     else:  # If the symbol is a terminal or a dummy symbol, return it
         return symbol
-
-def generate_invalid_sequence(valid_symbols, length):
-    invalid_sequence = ''.join(random.choice(valid_symbols) for _ in range(length))
-    return invalid_sequence
 
 def cyk_parse(sequence, grammar):
     n = len(sequence)
@@ -42,6 +49,49 @@ def cyk_parse(sequence, grammar):
     start_symbol = list(grammar.keys())[0]
     return start_symbol in table[0][n - 1]
 
+def generate_invalid_sequence(valid_symbols, grammar_rules, length):
+    is_valid = True
+    while is_valid:
+        invalid_sequence = ''.join(random.choice(valid_symbols) for _ in range(length))
+        is_valid = cyk_parse(invalid_sequence, grammar_rules)
+    return invalid_sequence
+
+def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset):
+    result = {"pos": set(), "neg": set()}
+    repeats = 0
+    def inc_repeats():
+        nonlocal repeats
+        repeats += 1
+        if repeats > 100:
+            raise "Maximum number of repeats (100) was exceeded"
+    for i in range(num_samples):
+        l = 0
+        pos_sample = ""
+        neg_sample = ""
+        while l < min_length or l > max_length or pos_sample in result["pos"]:
+            pos_sample = generate_random_sequence(grammar.rules, grammar.start_symbol, max_length // 2)
+            l = len(pos_sample)
+            inc_repeats()
+        repeats = 0
+        while neg_sample in result["neg"] or neg_sample == "":
+            neg_sample = generate_invalid_sequence(grammar.symbols, grammar.rules, l)
+            inc_repeats()
+        repeats = 0
+        result['pos'].add(pos_sample)
+        result["neg"].add(neg_sample)
+    result["pos"] = list(result["pos"])
+    result["neg"] = list(result["neg"])
+    return result
+
+def create_dataset(min_length, max_length, num_samples, loc_grammar, loc_dataset):
+    grammar = ruleset.Ruleset()
+    grammar.load(loc_grammar)
+
+    r = generate_data(min_length, max_length, num_samples, grammar)
+    with open(loc_dataset, "w") as f:
+        json.dump(r, f, indent=4)
+
+"""
 def main():
     # Define your grammar in CNF
     cnf_grammar = ruleset.Ruleset()
@@ -69,3 +119,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+"""
