@@ -27,7 +27,7 @@ class NCykParser(nn.Module):
         self.pRules = nn.ModuleList([ProdRule(rule_count) for _ in range(rule_count)])
         self.tRules = nn.Embedding(len(symbols), rule_count)
         nn.init.normal_(self.tRules.weight, 1, 0.1)
-        self.map = {sym: torch.tensor(i) for i, sym in enumerate(symbols)}
+        self.map = {sym: i for i, sym in enumerate(symbols)}
 
         """
         with torch.no_grad():
@@ -45,9 +45,6 @@ class NCykParser(nn.Module):
             self.tRules.weight[1, 2] = 1.0
             pass
         """
-        
-
-
 
     def apply_rule(self, s):
         if s in self.cache:
@@ -59,9 +56,9 @@ class NCykParser(nn.Module):
         
     def intern_forward(self, s: str):
         if len(s) == 1:
-            return self.tRules(self.map[s])
+            return self.tRules(torch.tensor(self.map[s], device=self.tRules.weight.device))
         else:
-            result = torch.zeros((len(self.pRules), len(s) - 1))
+            result = torch.zeros((len(self.pRules), len(s) - 1), device=self.tRules.weight.device)
             for i in range(1, len(s)):
 
                 u = self.apply_rule(s[:i])
@@ -99,36 +96,49 @@ class GrammarDataset(data.Dataset):
         else:
             return self.pos[index], torch.tensor(1.0, dtype=torch.float32)
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
+
 ds = GrammarDataset("export.json")
-dl = data.DataLoader(ds, 1, True)
+test_ds, train_ds = data.random_split(ds, (0.2, 0.8))
+dl_train = data.DataLoader(train_ds, 1, True)
+dl_test = data.DataLoader(test_ds, 1, True)
 model = NCykParser(4, ds.symbols)
+model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 for epoch in range(30):
-    count_correct = 0
-    count_total = 0
-    for sb, rb in dl:
+    for sb, rb in dl_train:
         #s = ["aba"]
         #r = torch.tensor(0.0, dtype=torch.float32).unsqueeze(0)
         pred = torch.zeros(len(sb))
         for i, s in enumerate(sb):
             pred[i] = model(s)
+        rb.to(device)
         loss = torch.sum((1.0 - rb) * pred ** 2 + rb * (pred - 2) ** 2)
-
-        count_total += len(sb)
-        count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
         
-
         loss.backward()
+        
         """
         for p in model.pRules:
             print(p.W.grad)
         print(model.tRules.weight.grad)
-        print(f"{r.item()} - {pred.item()}")
+        print(f"{rb.item()} - {pred.item()}")
         """
+        
         #print(f"{r.item()} - {pred.item()}")
         optimizer.step()
         optimizer.zero_grad()
+
+    count_correct = 0
+    count_total = 0
+    for sb, rb in dl_test:
+        pred = torch.zeros(len(sb))
+        for i, s in enumerate(sb):
+            pred[i] = model(s)
+        rb.to(device)
+        count_total += len(sb)
+        count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
     print(f"Acc: {count_correct / count_total}")
 
 for p in model.pRules:
