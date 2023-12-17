@@ -81,6 +81,7 @@ def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset)
         result["neg"].add(neg_sample)
     result["pos"] = list(result["pos"])
     result["neg"] = list(result["neg"])
+    result["symbols"] = grammar.symbols
     return result
 
 def create_dataset(min_length, max_length, num_samples, loc_grammar, loc_dataset):
@@ -90,6 +91,8 @@ def create_dataset(min_length, max_length, num_samples, loc_grammar, loc_dataset
     r = generate_data(min_length, max_length, num_samples, grammar)
     with open(loc_dataset, "w") as f:
         json.dump(r, f, indent=4)
+
+#create_dataset(1, 10, 200, "test_rules.json", "export.json")
 
 """
 def main():
