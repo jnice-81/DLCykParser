@@ -62,6 +62,7 @@ for epoch in range(epochs):
 
     print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item()}")
 
+# Test the model
 correct = 0
 with torch.no_grad():
     for inputs, targets in test_dataloader:
@@ -69,7 +70,7 @@ with torch.no_grad():
         targets = targets.to(device)
         
         test_outputs = model(inputs)
-        predictions = torch.argmax(test_outputs, dim=0)
-        correct += (predictions == targets).sum().item()
+        predictions = torch.argmax(test_outputs)
+        correct += (predictions == targets).item()
 
 print(f"Accuracy: {correct / len(test_dataset)}")
