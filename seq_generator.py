@@ -123,3 +123,5 @@ def main():
 if __name__ == "__main__":
     main()
 """
+
+# create_dataset(2, 100, 1000, "test_rules.json", "test_dataset.json")
