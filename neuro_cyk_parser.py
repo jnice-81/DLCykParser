@@ -104,18 +104,17 @@ test_ds, train_ds = data.random_split(ds, (0.2, 0.8))
 dl_train = data.DataLoader(train_ds, 1, True)
 dl_test = data.DataLoader(test_ds, 1, True)
 model = NCykParser(4, ds.symbols)
+model2 = NCykParser(4, ds.symbols)
 model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-for epoch in range(30):
+for epoch in range(60):
     for sb, rb in dl_train:
-        #s = ["aba"]
-        #r = torch.tensor(0.0, dtype=torch.float32).unsqueeze(0)
         pred = torch.zeros(len(sb))
         for i, s in enumerate(sb):
             pred[i] = model(s)
         rb.to(device)
-        loss = torch.sum((1.0 - rb) * pred ** 2 + rb * (pred - 2) ** 2)
+        loss = torch.sum(torch.abs((1.0 - rb) * pred) + torch.abs(rb * (pred - 2)))
         
         loss.backward()
         
@@ -129,17 +128,34 @@ for epoch in range(30):
         #print(f"{r.item()} - {pred.item()}")
         optimizer.step()
         optimizer.zero_grad()
+        
+    with torch.no_grad():
+        for p in model.pRules:
+            p.W[p.W < 0] = 0
+        model.tRules.weight[model.tRules.weight < 0] = 0
 
-    count_correct = 0
-    count_total = 0
-    for sb, rb in dl_test:
-        pred = torch.zeros(len(sb))
-        for i, s in enumerate(sb):
-            pred[i] = model(s)
-        rb.to(device)
-        count_total += len(sb)
-        count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
-    print(f"Acc: {count_correct / count_total}")
+        """
+        for p, w in zip(model.pRules, model2.pRules):
+            w.W = p.W.clone()
+            w.W[w.W < 1] = 0
+            w.W[w.W > 1] = 1
+            print(p.W)
+        model2.tRules.weight = model.tRules.weight.clone()
+        model2.tRules.weight[model2.tRules.weight < 1] = 0
+        model2.tRules.weight[model2.tRules.weight > 1] = 1
+        print(model.tRules.weight)
+        """
+
+        count_correct = 0
+        count_total = 0
+        for sb, rb in dl_test:
+            pred = torch.zeros(len(sb))
+            for i, s in enumerate(sb):
+                pred[i] = model2(s)
+            rb.to(device)
+            count_total += len(sb)
+            count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
+        print(f"Acc: {count_correct / count_total}")
 
 for p in model.pRules:
     print(p.W)
