@@ -100,7 +100,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
 
 ds = GrammarDataset("export.json")
-test_ds, train_ds = data.random_split(ds, (0.2, 0.8))
+test_ds, train_ds = data.random_split(ds, (0.2, 0.8), torch.Generator().manual_seed(36))
 dl_train = data.DataLoader(train_ds, 1, True)
 dl_test = data.DataLoader(test_ds, 1, True)
 model = NCykParser(4, ds.symbols)
@@ -151,7 +151,7 @@ for epoch in range(60):
         for sb, rb in dl_test:
             pred = torch.zeros(len(sb))
             for i, s in enumerate(sb):
-                pred[i] = model2(s)
+                pred[i] = model(s)
             rb.to(device)
             count_total += len(sb)
             count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
