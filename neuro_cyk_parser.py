@@ -15,7 +15,6 @@ class ProdRule(nn.Module):
     def forward(self, u, v):
         x = torch.outer(u, v)
         x = self.W * x
-        x = F.relu(x)
         x = torch.max(x)
 
         return x
@@ -100,7 +99,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
 
 ds = GrammarDataset("export.json")
-test_ds, train_ds = data.random_split(ds, (0.2, 0.8), torch.Generator().manual_seed(36))
+len_train_set = int(0.8 * len(ds))
+test_ds, train_ds = data.random_split(ds, (len(ds) - len_train_set, len_train_set), torch.Generator().manual_seed(36))
 dl_train = data.DataLoader(train_ds, 1, True)
 dl_test = data.DataLoader(test_ds, 1, True)
 model = NCykParser(4, ds.symbols)
@@ -108,31 +108,36 @@ model2 = NCykParser(4, ds.symbols)
 model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-for epoch in range(60):
-    for sb, rb in dl_train:
-        pred = torch.zeros(len(sb))
-        for i, s in enumerate(sb):
-            pred[i] = model(s)
-        rb.to(device)
-        loss = torch.sum(torch.abs((1.0 - rb) * pred) + torch.abs(rb * (pred - 2)))
-        
-        loss.backward()
-        
-        """
-        for p in model.pRules:
-            print(p.W.grad)
-        print(model.tRules.weight.grad)
-        print(f"{rb.item()} - {pred.item()}")
-        """
-        
-        #print(f"{r.item()} - {pred.item()}")
-        optimizer.step()
-        optimizer.zero_grad()
+for epoch in range(100):
+    for _ in range(5):
+        for sb, rb in dl_train:
+            pred = torch.zeros(len(sb))
+            weights = torch.zeros(len(sb))
+            for i, s in enumerate(sb):
+                pred[i] = model(s)
+                weights[i] = 1 / len(s)
+            rb.to(device)
+            loss = torch.sum((torch.abs((1 - rb) * pred) + torch.abs(rb * (pred - 2))) * weights)
+            #loss = torch.binary_cross_entropy_with_logits(pred - 1, rb)
+            
+            loss.backward()
+            
+            """
+            for p in model.pRules:
+                print(p.W.grad)
+            print(model.tRules.weight.grad)
+            print(f"{rb.item()} - {pred.item()}")
+            """
+            
+            #print(f"{r.item()} - {pred.item()}")
+            optimizer.step()
+            optimizer.zero_grad()
         
     with torch.no_grad():
         for p in model.pRules:
             p.W[p.W < 0] = 0
         model.tRules.weight[model.tRules.weight < 0] = 0
+
 
         """
         for p, w in zip(model.pRules, model2.pRules):
@@ -146,18 +151,20 @@ for epoch in range(60):
         print(model.tRules.weight)
         """
 
-        count_correct = 0
-        count_total = 0
-        for sb, rb in dl_test:
-            pred = torch.zeros(len(sb))
-            for i, s in enumerate(sb):
-                pred[i] = model(s)
-            rb.to(device)
-            count_total += len(sb)
-            count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
-        print(f"Acc: {count_correct / count_total}")
-
-for p in model.pRules:
-    print(p.W)
-print(model.tRules.weight)
-print(model.map)
+        def compute_and_print_accuracy(dl, msg):
+            count_correct = 0
+            count_total = 0
+            for sb, rb in dl:
+                pred = torch.zeros(len(sb))
+                for i, s in enumerate(sb):
+                    pred[i] = model(s)
+                rb.to(device)
+                count_total += len(sb)
+                count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
+            print(f"{msg} Acc: {count_correct / count_total}")
+        compute_and_print_accuracy(dl_test, "test")
+        compute_and_print_accuracy(dl_train, "train")
+        for p in model.pRules:
+            print(p.W)
+        print(model.tRules.weight)
+        print(model.map)
