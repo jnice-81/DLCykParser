@@ -1,10 +1,10 @@
-from logging import warn
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.utils import data
 import json
 from torch import optim
+import tqdm
 
 class ProdRule(nn.Module):
     def __init__(self, rule_count) -> None:
@@ -28,23 +28,6 @@ class NCykParser(nn.Module):
         nn.init.normal_(self.tRules.weight, 1, 0.1)
         self.map = {sym: i for i, sym in enumerate(symbols)}
 
-        """
-        with torch.no_grad():
-            warn("Debug initialization")
-            for i in range(len(self.pRules)):
-                self.pRules[i].W = nn.Parameter(torch.zeros((rule_count, rule_count)))
-            self.pRules[0].W[1, 2] = 1.0
-            self.pRules[0].W[2, 3] = 1.0
-            self.pRules[1].W[2, 1] = 1.0
-            self.pRules[2].W[3, 3] = 1.0
-            self.pRules[3].W[1, 2] = 1.0
-            nn.init.zeros_(self.tRules.weight)
-            self.tRules.weight[0, 1] = 1.0
-            self.tRules.weight[0, 3] = 1.0
-            self.tRules.weight[1, 2] = 1.0
-            pass
-        """
-
     def apply_rule(self, s):
         if s in self.cache:
             return self.cache[s]
@@ -57,7 +40,7 @@ class NCykParser(nn.Module):
         if len(s) == 1:
             return self.tRules(torch.tensor(self.map[s], device=self.tRules.weight.device))
         else:
-            result = torch.zeros((len(self.pRules), len(s) - 1), device=self.tRules.weight.device)
+            result = torch.zeros(len(self.pRules), device=self.tRules.weight.device)
             for i in range(1, len(s)):
 
                 u = self.apply_rule(s[:i])
@@ -65,9 +48,9 @@ class NCykParser(nn.Module):
 
                 for j, p in enumerate(self.pRules):
                     r = p(u, v)
-                    result[j, i-1] = r
-            a, _ = torch.max(result, dim=1)
-            return a
+                    if r > result[j]:
+                        result[j] = r
+            return result
 
     def forward(self, s: str):
         self.cache = {}
@@ -98,7 +81,7 @@ class GrammarDataset(data.Dataset):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
 
-ds = GrammarDataset("export.json")
+ds = GrammarDataset("small.json")
 len_train_set = int(0.8 * len(ds))
 test_ds, train_ds = data.random_split(ds, (len(ds) - len_train_set, len_train_set), torch.Generator().manual_seed(36))
 dl_train = data.DataLoader(train_ds, 1, True)
@@ -109,29 +92,21 @@ model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 for epoch in range(100):
-    for _ in range(5):
-        for sb, rb in dl_train:
+    for _ in range(1):
+        for sb, rb in tqdm.tqdm(dl_train):
             pred = torch.zeros(len(sb))
             weights = torch.zeros(len(sb))
             for i, s in enumerate(sb):
                 pred[i] = model(s)
-                weights[i] = 1 / len(s)
+                #weights[i] = 1 / len(s)
+                weights[i] = 1
             rb.to(device)
             loss = torch.sum((torch.abs((1 - rb) * pred) + torch.abs(rb * (pred - 2))) * weights)
             #loss = torch.binary_cross_entropy_with_logits(pred - 1, rb)
-            
             loss.backward()
-            
-            """
-            for p in model.pRules:
-                print(p.W.grad)
-            print(model.tRules.weight.grad)
-            print(f"{rb.item()} - {pred.item()}")
-            """
-            
-            #print(f"{r.item()} - {pred.item()}")
             optimizer.step()
             optimizer.zero_grad()
+            
         
     with torch.no_grad():
         for p in model.pRules:
@@ -163,7 +138,7 @@ for epoch in range(100):
                 count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
             print(f"{msg} Acc: {count_correct / count_total}")
         compute_and_print_accuracy(dl_test, "test")
-        compute_and_print_accuracy(dl_train, "train")
+        #compute_and_print_accuracy(dl_train, "train")
         for p in model.pRules:
             print(p.W)
         print(model.tRules.weight)
