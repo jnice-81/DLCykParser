@@ -69,7 +69,7 @@ def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset)
         pos_sample = ""
         neg_sample = ""
         while l < min_length or l > max_length or pos_sample in result["pos"]:
-            pos_sample = generate_random_sequence(grammar.rules, grammar.start_symbol, max_length // 2)
+            pos_sample = generate_random_sequence(grammar.rules, grammar.start_symbol, max_length)
             l = len(pos_sample)
             inc_repeats()
         repeats = 0
@@ -92,7 +92,7 @@ def create_dataset(min_length, max_length, num_samples, loc_grammar, loc_dataset
     with open(loc_dataset, "w") as f:
         json.dump(r, f, indent=4)
 
-#create_dataset(1, 10, 200, "test_rules.json", "export.json")
+create_dataset(10, 20, 60, "test_rules.json", "small.json")
 
 """
 def main():

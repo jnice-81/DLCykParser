@@ -92,7 +92,7 @@ model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 for epoch in range(100):
-    for _ in range(1):
+    for _ in range(4):
         for sb, rb in tqdm.tqdm(dl_train):
             pred = torch.zeros(len(sb))
             weights = torch.zeros(len(sb))
