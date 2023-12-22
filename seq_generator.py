@@ -92,7 +92,7 @@ def create_dataset(min_length, max_length, num_samples, loc_grammar, loc_dataset
     with open(loc_dataset, "w") as f:
         json.dump(r, f, indent=4)
 
-#create_dataset(1, 10, 200, "test_rules.json", "export.json")
+create_dataset(10, 20, 500, "test_rules.json", "export.json")
 
 """
 def main():
