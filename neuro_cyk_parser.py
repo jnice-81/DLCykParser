@@ -23,17 +23,13 @@ class PRule(nn.Module):
     def __init__(self, rule_count) -> None:
         super().__init__()
 
-        self.b1 = ResBlock(2 * rule_count)
-        self.b2 = ResBlock(rule_count)
-        self.bt = nn.Linear(2 * rule_count, rule_count)
-        #self.mpol = nn.AvgPool1d(2, 2)
+        self.b1 = ResBlock(rule_count * rule_count)
+        self.bt = nn.Linear(rule_count * rule_count, rule_count)
 
     def forward(self, x, y):
-        x = torch.cat((x, y))
+        x = torch.outer(x, y).flatten()
         x = self.b1(x)
-        #x = self.mpol(x.unsqueeze(0)).squeeze()
         x = self.bt(x)
-        x = self.b2(x)
         return x
 
 class NCykParser(nn.Module):
@@ -103,11 +99,11 @@ device = torch.device('cpu')
 ds = GrammarDataset("export.json")
 len_train_set = int(0.8 * len(ds))
 test_ds, train_ds = data.random_split(ds, (len(ds) - len_train_set, len_train_set), torch.Generator().manual_seed(36))
-dl_train = data.DataLoader(train_ds, 20, True)
+dl_train = data.DataLoader(train_ds, 10, True)
 dl_test = data.DataLoader(test_ds, 1, True)
 model = NCykParser(7, ds.symbols)
 model.to(device)
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.AdamW(model.parameters(), lr=0.001)
 
 for epoch in range(100):
     for _ in range(5):
