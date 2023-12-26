@@ -11,9 +11,15 @@ class ResBlock(nn.Module):
     def __init__(self, dim) -> None:
         super().__init__()
         l = []
-        for _ in range(4):
-            l.append(nn.Linear(dim, dim))
-            l.append(nn.LeakyReLU())
+        scale_dim = 3 * dim
+        l.append(nn.Linear(dim, scale_dim))
+        l.append(nn.LeakyReLU())
+        l.append(nn.Linear(scale_dim, dim))
+        l.append(nn.LeakyReLU())
+        l.append(nn.Linear(dim, scale_dim))
+        l.append(nn.LeakyReLU())
+        l.append(nn.Linear(scale_dim, dim))
+        l.append(nn.LeakyReLU())
         self.block = nn.Sequential(*l)
 
     def forward(self, x):
@@ -23,14 +29,23 @@ class PRule(nn.Module):
     def __init__(self, rule_count) -> None:
         super().__init__()
 
-        self.b1 = ResBlock(rule_count * rule_count)
-        self.bt = nn.Linear(rule_count * rule_count, rule_count)
+        self.b1 = ResBlock(2 * rule_count)
+        self.b11 = ResBlock(2 * rule_count)
+        self.bt = nn.Linear(2 * rule_count, rule_count)
+        self.b2 = ResBlock(rule_count)
+        self.b22 = ResBlock(rule_count)
+
+    def norm(self, t):
+        return (t - t.mean()) / torch.var(t)
 
     def forward(self, x, y):
-        x = torch.outer(x, y).flatten()
-        x = self.b1(x)
-        x = self.bt(x)
-        return x
+        t = torch.cat((x, y))
+        t = self.b1(t)
+        t = self.b11(t)
+        t = self.bt(t)# + t[0:t.shape[0] // 2] + t[t.shape[0] // 2:]
+        t = self.b2(t)
+        t = self.b22(t)
+        return t
 
 class NCykParser(nn.Module):
     def __init__(self, rule_count, symbols) -> None:
@@ -96,12 +111,12 @@ class GrammarDataset(data.Dataset):
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
 
-ds = GrammarDataset("export.json")
+ds = GrammarDataset("export2.json")
 len_train_set = int(0.8 * len(ds))
 test_ds, train_ds = data.random_split(ds, (len(ds) - len_train_set, len_train_set), torch.Generator().manual_seed(36))
 dl_train = data.DataLoader(train_ds, 10, True)
 dl_test = data.DataLoader(test_ds, 1, True)
-model = NCykParser(7, ds.symbols)
+model = NCykParser(4, ds.symbols)
 model.to(device)
 optimizer = optim.AdamW(model.parameters(), lr=0.001)
 
