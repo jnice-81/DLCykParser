@@ -65,7 +65,6 @@ def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset,
     def inc_repeats():
         nonlocal repeats
         repeats += 1
-        print(repeats)
         if repeats > 1000:
             raise "Maximum number of repeats (1000) was exceeded"
     for i in range(num_samples):
@@ -105,7 +104,6 @@ def create_dataset(min_length, max_train_length, max_test_length, num_train_samp
             if (not rule[1]):
                 grammar.rules[nt].remove(rule)
     
-    print("lol")
     # not sure how to export/save the data yet, will be completed later
     ood_test = generate_data(max_train_length+1, max_test_length, num_ood_samples, grammar, "test")
     test_data = generate_data(min_length, max_train_length, num_id_samples, grammar, "test")
@@ -143,5 +141,5 @@ if __name__ == "__main__":
 """
 
 if __name__ == "__main__":
-    create_dataset(2, 75, 100, 1600, 300, 100, "test_rules.json", "kekw.json")
+    create_dataset(2, 75, 100, 1600, 300, 100, "test_rules.json", "test_ood.json")
 # create_dataset(2, 100, 1000, "test_rules.json", "test_dataset.json")
