@@ -17,6 +17,8 @@ class Ruleset:
         for rule in data["rules"]:
             from_symbol = rule["From"]
             to_symbols = rule["To"]
+            # add a field for tracking whether the rule was productive during generation
+            to_symbols = track_rules(to_symbols)
             self.rules[from_symbol] = to_symbols
 
     def as_json(self):
@@ -40,6 +42,9 @@ class Ruleset:
 
     def __str__(self) -> str:
         return json.dumps(self.as_json(), indent=4)
+
+def track_rules(to_symbols):
+    return [[rule, False] for rule in to_symbols]
 
 def generate_random_ruleset(valid_symbols, max_rules, max_different_rules, seed=0):
     random.seed(seed)
