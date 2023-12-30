@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 from torch.autograd import Variable 
 
-batchsize = 50 # how many samples the network sees before it updates itself
+batchsize = 25 # how many samples the network sees before it updates itself
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 path = "test_dataset.json"
 dataset = CFGDataset(path)
@@ -20,11 +20,11 @@ test_dataloader =  DataLoader(dataset=test_data, batch_size=batchsize, shuffle=T
 
 
 input_dim = 99 #or 99? 
-hidden_size = 128
+hidden_size = 512
 num_layers = 2
 num_classes = 2
-num_epochs = 10
-learning_rate = 0.01
+num_epochs = 100
+learning_rate = 0.002
 
 
 class LSTM(nn.Module):
@@ -38,10 +38,12 @@ class LSTM(nn.Module):
         self.lstm = nn.LSTM(input_dim, hidden_size, num_layers, batch_first=True)
         self.batchsize = batchsize
         self.output_layer = nn.Linear(hidden_size, num_classes) #fully connected last layer
+        #self.dropout = nn.Dropout(0.2)
         
 
     def forward(self,x):
         #x = self.embedding(x)
+        #x = self.dropout(x)
         h_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #hidden state
         c_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #internal state
         # Propagate input through LSTM
@@ -67,8 +69,9 @@ sgd = optim.SGD(model.parameters(), lr=learning_rate)
 adam = optim.Adam(model.parameters(), lr=learning_rate)
 
 
-def train(num_epochs, model, train_dataloader, loss_func):
+def train(num_epochs, model, train_dataloader, loss_func, arr):
     total_steps = len(train_dataloader)
+    correct = 0
     for epoch in range(num_epochs):
         for batch, (x_batch, y_batch) in enumerate(train_dataloader):
             #x_batch must have dim 3: torch.Size([50, 1, 3]) (additional param timestamp)
@@ -85,10 +88,17 @@ def train(num_epochs, model, train_dataloader, loss_func):
             
             loss.backward()
             adam.step()
-
-            if(batch)%50 == 0:
-                print(f"Epoch: {epoch+1}; Batch: {batch+1} / {total_steps}; Loss: {loss.item():>4f}")
-
+            correct += (output.argmax(1) == y_batch).type(torch.float).sum().item()
+            
+            #if(batch)%100 == 0:
+            #    print(f"Epoch: {epoch+1}; Batch: {batch+1} / {total_steps}; Loss: {loss.item():>4f}")
+        
+        correct /= (total_steps * batchsize)
+        print(f"Epoch: {epoch+1}; Loss: {loss.item():>4f}")
+        #print(100*correct)
+        arr[0][epoch] = 100*correct
+        arr[1][epoch] = loss.item()
+    return arr
 
 def test_loop(dataloader, model, loss_func, optimizer):
     size= len(dataloader.dataset)
@@ -109,8 +119,10 @@ def test_loop(dataloader, model, loss_func, optimizer):
     print(f"Test Error:\n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}\n")
     return 100*correct
 
-
-train(num_epochs, model, train_dataloader, loss_func)
-
+arrTrain = np.empty((2, num_epochs))
+arrVal = np.empty((2, num_epochs))
+arr = train(num_epochs, model, train_dataloader, loss_func, arrTrain)
+#on training set
+test_loop(train_dataloader, model, loss_func, adam)
+#validatio set
 test_loop(test_dataloader, model, loss_func, adam)
-
