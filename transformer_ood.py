@@ -17,7 +17,6 @@ class TransformerClassifier(nn.Module):
         self.fc = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
-        # print(x.shape)
         x = self.embedding(x)
         # print(x.shape)
         x = self.transformer_encoder(x)
@@ -29,13 +28,13 @@ class TransformerClassifier(nn.Module):
         return x
 
 # Hyperparameters
-input_size = 3  # 'a', 'b', and padding
+input_size = 27  # 'a', 'b', and padding
 hidden_size = 32
 num_classes = 2  # Binary classification (0 or 1)
 num_layers = 1
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-path = "datasets/random/test_ood.json"
+path = "datasets/binary_tree/test_ood.json"
 
 batchsize = 1
 
@@ -55,7 +54,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # Training loop
-epochs = 1
+epochs = 10
 for epoch in range(epochs):
     for inputs, targets in tqdm.tqdm(train_dataloader):
         inputs = inputs.to(device)

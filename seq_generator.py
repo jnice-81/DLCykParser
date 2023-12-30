@@ -14,13 +14,16 @@ def generate_random_sequence(grammar, symbol, max_depth, mode, depth = 0):
             for p in grammar[symbol]:
                 if not isinstance(p[0], list):
                     production = p
+                    p[1] = True
                     break
         if production is None:
+            #print(symbol, grammar[symbol])
             production = random.choice(grammar[symbol])
             if (mode == "train"):
                 production[1] = True
         return ''.join(generate_random_sequence(grammar, s, max_depth, mode, depth+1) for s in production[0])
     else:  # If the symbol is a terminal or a dummy symbol, return it
+        #print("returning", symbol)
         return symbol
 
 def cyk_parse(sequence, grammar):
@@ -96,15 +99,26 @@ def create_dataset(min_length, max_train_length, max_test_length, num_train_samp
     grammar.load(loc_grammar)
 
     train_data = generate_data(min_length, max_train_length, num_train_samples, grammar, "train")
-
     non_terminals = list(grammar.rules.keys())
+
+    for nt in non_terminals:
+        if (grammar.rules[nt] == []):
+            grammar.rules.pop(nt)
+            continue
+
+        print(nt, grammar.rules[nt])
 
     # omit unproductive rules from test sets
     for nt in non_terminals:
-        for rule in grammar.rules[nt]:
+        length = len(grammar.rules[nt])
+        removed = 0
+        for i in range(length):
+            rule = grammar.rules[nt][i-removed]
             if (not rule[1]):
+                removed += 1
                 grammar.rules[nt].remove(rule)
     
+
     # not sure how to export/save the data yet, will be completed later
     ood_test = generate_data(max_train_length+1, max_test_length, num_ood_samples, grammar, "test", train_data)
     test_data = generate_data(min_length, max_train_length, num_id_samples, grammar, "test", train_data)
@@ -150,5 +164,5 @@ if __name__ == "__main__":
 """
 
 if __name__ == "__main__":
-    create_dataset(2, 75, 100, 1600, 300, 100, "test_rules.json", "datasets/random/")
+    create_dataset(1, 15, 200, 2500, 500, 250, "grammars/binary_tree/test.json", "datasets/binary_tree/")
 # create_dataset(2, 100, 1000, "test_rules.json", "test_dataset.json")

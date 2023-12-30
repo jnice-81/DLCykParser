@@ -1,4 +1,7 @@
 from numpy.random import uniform 
+import json
+import sys
+import os
 
 class Tree():
     def __init__(self, left = None, right = None, label = None, depth = None):
@@ -34,6 +37,9 @@ def increment_string(s):
     if carry:
         result.append('a')
 
+    # wrap around to a
+    if (len(result) > 1):
+        return 'a'
     return ''.join(result[::-1])
 
 # generates a binary tree with exactly the specified depth and given branching probability
@@ -72,12 +78,12 @@ def parse_tree(tree, rules, terminator, symbols):
     
     if (tree.left is None):
         entry = {"From": tree.label, "To": [curr_symbol]}
-        symbols.append(str(symbols))
+        symbols.append(curr_symbol)
         rules.append(entry)
         return
     
     entry = {"From": tree.label, "To": [[tree.left.label, tree.right.label], curr_symbol]}
-    symbols.append(str(symbols))
+    symbols.append(curr_symbol)
     rules.append(entry)
 
     parse_tree(tree.left, rules, terminator, symbols)
@@ -89,11 +95,10 @@ def create_grammar(depth = 3, prob = 1):
     symbols = []
     parse_tree(tree, rules, Pointer('a'), symbols)
 
-    return {"start_symbol": tree.label, "rules": rules, "symbols": symbols}
+    return {"start_symbol": tree.label, "rules": rules, "symbols": list(set(symbols))}
 
 if __name__ == "__main__":
-    tree = generate_tree(3, 1, Pointer(0), True)
-    rules = []
-    symbols = []
-    parse = parse_tree(tree, rules, Pointer('a'), symbols)
+    grammar = create_grammar(8, 0.75)
+    with open(os.path.join("grammars/binary_tree", "test.json"), "w") as f:
+        json.dump(grammar, f, indent=4)
     
