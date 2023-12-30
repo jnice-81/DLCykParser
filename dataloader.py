@@ -7,17 +7,18 @@ import numpy as np
 char_to_index = {'a': 1, 'b': 2}
 
 class CFGDataset(Dataset):
-    def __init__(self, dataset_path, padding=True):
+    def __init__(self, dataset_path, data_type, padding=True):
         with open(dataset_path, "r") as file:
             dataset = json.load(file)
         # self.positive_samples = dataset["pos"]
-        self.positive_samples = [[char_to_index[char] for char in sequence] for sequence in dataset["pos"]]
+        self.positive_samples = [[char_to_index[char] for char in sequence] for sequence in dataset[data_type]["pos"]]
         # self.negative_samples = dataset["neg"]
-        self.negative_samples = [[char_to_index[char] for char in sequence] for sequence in dataset["neg"]]
+        self.negative_samples = [[char_to_index[char] for char in sequence] for sequence in dataset[data_type]["neg"]]
 
         # Pad sequences to the same length
         if padding:
-            max_length = max([len(sequence) for sequence in self.positive_samples + self.negative_samples])
+            #max_length = max([len(sequence) for sequence in self.positive_samples + self.negative_samples])
+            max_length = 100
             for sequence in self.positive_samples:
                 sequence += [0] * (max_length - len(sequence))
             for sequence in self.negative_samples:

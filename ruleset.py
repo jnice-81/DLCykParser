@@ -19,6 +19,7 @@ class Ruleset:
             to_symbols = rule["To"]
             # add a field for tracking whether the rule was productive during generation
             to_symbols = track_rules(to_symbols)
+            print(to_symbols)
             self.rules[from_symbol] = to_symbols
 
     def as_json(self):

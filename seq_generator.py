@@ -2,6 +2,7 @@ import random
 import ruleset
 import json
 import sys
+import os
 
 
 sys.setrecursionlimit(20000)
@@ -59,7 +60,7 @@ def generate_invalid_sequence(valid_symbols, grammar_rules, length, mode):
         is_valid = cyk_parse(invalid_sequence, grammar_rules)
     return invalid_sequence
 
-def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset, mode):
+def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset, mode, train_data = None):
     result = {"pos": set(), "neg": set()}
     repeats = 0
     def inc_repeats():
@@ -80,21 +81,21 @@ def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset,
             neg_sample = generate_invalid_sequence(grammar.symbols, grammar.rules, l, mode)
             inc_repeats()
         repeats = 0
-        result['pos'].add(pos_sample)
-        result["neg"].add(neg_sample)
+        if (mode == "train" or (mode == "test" and pos_sample not in train_data["pos"])):
+            result['pos'].add(pos_sample)
+        if (mode == "train" or (mode == "test" and neg_sample not in train_data["neg"])):
+            result["neg"].add(neg_sample)
     result["pos"] = list(result["pos"])
     result["neg"] = list(result["neg"])
     result["symbols"] = grammar.symbols
     return result
 
 def create_dataset(min_length, max_train_length, max_test_length, num_train_samples, num_id_samples,
-                   num_ood_samples, loc_grammar, loc_dataset):
+                   num_ood_samples, loc_grammar, loc_dataset_dir):
     grammar = ruleset.Ruleset()
     grammar.load(loc_grammar)
 
     train_data = generate_data(min_length, max_train_length, num_train_samples, grammar, "train")
-    with open(loc_dataset, "w") as f:
-        json.dump(train_data, f, indent=4)
 
     non_terminals = list(grammar.rules.keys())
 
@@ -105,8 +106,16 @@ def create_dataset(min_length, max_train_length, max_test_length, num_train_samp
                 grammar.rules[nt].remove(rule)
     
     # not sure how to export/save the data yet, will be completed later
-    ood_test = generate_data(max_train_length+1, max_test_length, num_ood_samples, grammar, "test")
-    test_data = generate_data(min_length, max_train_length, num_id_samples, grammar, "test")
+    ood_test = generate_data(max_train_length+1, max_test_length, num_ood_samples, grammar, "test", train_data)
+    test_data = generate_data(min_length, max_train_length, num_id_samples, grammar, "test", train_data)
+
+    dataset = {}
+    dataset["train"] = train_data
+    dataset["test_id"] = test_data
+    dataset["test_ood"] = ood_test
+    
+    with open(os.path.join(loc_dataset_dir, "test_ood.json"), "w") as f:
+        json.dump(dataset, f, indent=4)
 
 #create_dataset(1, 10, 200, "test_rules.json", "export.json")
 
@@ -141,5 +150,5 @@ if __name__ == "__main__":
 """
 
 if __name__ == "__main__":
-    create_dataset(2, 75, 100, 1600, 300, 100, "test_rules.json", "test_ood.json")
+    create_dataset(2, 75, 100, 1600, 300, 100, "test_rules.json", "datasets/random/")
 # create_dataset(2, 100, 1000, "test_rules.json", "test_dataset.json")
