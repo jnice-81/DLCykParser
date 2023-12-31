@@ -131,7 +131,7 @@ def create_dataset(min_length, max_train_length, max_test_length, num_train_samp
     with open(os.path.join(loc_dataset_dir, "test_ood.json"), "w") as f:
         json.dump(dataset, f, indent=4)
 
-#create_dataset(1, 10, 200, "test_rules.json", "export.json")
+#create_dataset(10, 20, 200, "test_rules.json", "export2.json")
 
 """
 def main():
