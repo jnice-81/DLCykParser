@@ -5,49 +5,57 @@ import torch.nn.functional as F
 from torch.utils import data
 import json
 from torch import optim
+import tqdm
 
-class ProdRule(nn.Module):
+class ResBlock(nn.Module):
+    def __init__(self, dim) -> None:
+        super().__init__()
+        l = []
+        scale_dim = 3 * dim
+        l.append(nn.Linear(dim, scale_dim))
+        l.append(nn.LeakyReLU())
+        l.append(nn.Linear(scale_dim, dim))
+        l.append(nn.LeakyReLU())
+        l.append(nn.Linear(dim, scale_dim))
+        l.append(nn.LeakyReLU())
+        l.append(nn.Linear(scale_dim, dim))
+        l.append(nn.LeakyReLU())
+        self.block = nn.Sequential(*l)
+
+    def forward(self, x):
+        return self.block(x) + x
+    
+class PRule(nn.Module):
     def __init__(self, rule_count) -> None:
         super().__init__()
 
-        self.W = nn.Parameter(torch.normal(1, 0.1, (rule_count, rule_count)))
-    
-    def forward(self, u, v):
-        x = torch.outer(u, v)
-        x = self.W * x
-        x = F.relu(x)
-        x = torch.max(x)
+        self.b1 = ResBlock(2 * rule_count)
+        self.b11 = ResBlock(2 * rule_count)
+        self.bt = nn.Linear(2 * rule_count, rule_count)
+        self.b2 = ResBlock(rule_count)
+        self.b22 = ResBlock(rule_count)
 
-        return x
-    
+    def norm(self, t):
+        return (t - t.mean()) / torch.var(t)
+
+    def forward(self, x, y):
+        t = torch.cat((x, y))
+        t = self.b1(t)
+        t = self.b11(t)
+        t = self.bt(t)# + t[0:t.shape[0] // 2] + t[t.shape[0] // 2:]
+        t = self.b2(t)
+        t = self.b22(t)
+        return t
+
 class NCykParser(nn.Module):
     def __init__(self, rule_count, symbols) -> None:
         super().__init__()
 
-        self.pRules = nn.ModuleList([ProdRule(rule_count) for _ in range(rule_count)])
+        self.prule = PRule(rule_count)
         self.tRules = nn.Embedding(len(symbols), rule_count)
-        nn.init.normal_(self.tRules.weight, 1, 0.1)
-        self.map = {sym: torch.tensor(i) for i, sym in enumerate(symbols)}
-
-        """
-        with torch.no_grad():
-            warn("Debug initialization")
-            for i in range(len(self.pRules)):
-                self.pRules[i].W = nn.Parameter(torch.zeros((rule_count, rule_count)))
-            self.pRules[0].W[1, 2] = 1.0
-            self.pRules[0].W[2, 3] = 1.0
-            self.pRules[1].W[2, 1] = 1.0
-            self.pRules[2].W[3, 3] = 1.0
-            self.pRules[3].W[1, 2] = 1.0
-            nn.init.zeros_(self.tRules.weight)
-            self.tRules.weight[0, 1] = 1.0
-            self.tRules.weight[0, 3] = 1.0
-            self.tRules.weight[1, 2] = 1.0
-            pass
-        """
-        
-
-
+        self.map = {sym: i for i, sym in enumerate(symbols)}
+        self.topl = ResBlock(rule_count)
+        self.ltopl = nn.Linear(rule_count, 2)
 
     def apply_rule(self, s):
         if s in self.cache:
@@ -59,26 +67,27 @@ class NCykParser(nn.Module):
         
     def intern_forward(self, s: str):
         if len(s) == 1:
-            return self.tRules(self.map[s])
+            return self.tRules(torch.tensor(self.map[s], device=self.tRules.weight.device))
         else:
-            result = torch.zeros((len(self.pRules), len(s) - 1))
+            results = []
             for i in range(1, len(s)):
 
                 u = self.apply_rule(s[:i])
                 v = self.apply_rule(s[i:])
 
-                for j, p in enumerate(self.pRules):
-                    r = p(u, v)
-                    result[j, i-1] = r
-            a, _ = torch.max(result, dim=1)
-            return a
+                comb = self.prule(u, v)
+                results.append(comb)
+            r = torch.stack(results, 1)
+            r, _ = torch.max(r, dim=1)
+            return r
 
     def forward(self, s: str):
         self.cache = {}
 
-        result = self.intern_forward(s)
+        emb = self.intern_forward(s)
+        result = self.ltopl(self.topl(emb))
 
-        return result[0].unsqueeze(0)
+        return result
 
 class GrammarDataset(data.Dataset):
     def __init__(self, file) -> None:
@@ -99,39 +108,47 @@ class GrammarDataset(data.Dataset):
         else:
             return self.pos[index], torch.tensor(1.0, dtype=torch.float32)
 
-ds = GrammarDataset("export.json")
-dl = data.DataLoader(ds, 1, True)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu')
+
+ds = GrammarDataset("export2.json")
+len_train_set = int(0.8 * len(ds))
+test_ds, train_ds = data.random_split(ds, (len(ds) - len_train_set, len_train_set), torch.Generator().manual_seed(36))
+dl_train = data.DataLoader(train_ds, 10, True)
+dl_test = data.DataLoader(test_ds, 1, True)
 model = NCykParser(4, ds.symbols)
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+model.to(device)
+optimizer = optim.AdamW(model.parameters(), lr=0.001)
 
-for epoch in range(30):
-    count_correct = 0
-    count_total = 0
-    for sb, rb in dl:
-        #s = ["aba"]
-        #r = torch.tensor(0.0, dtype=torch.float32).unsqueeze(0)
-        pred = torch.zeros(len(sb))
-        for i, s in enumerate(sb):
-            pred[i] = model(s)
-        loss = torch.sum((1.0 - rb) * pred ** 2 + rb * (pred - 2) ** 2)
-
-        count_total += len(sb)
-        count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
+for epoch in range(100):
+    for _ in range(5):
+        for sb, rb in tqdm.tqdm(dl_train):
+            pred = torch.zeros(len(sb), 2, device=device)
+            weights = torch.zeros(len(sb))
+            for i, s in enumerate(sb):
+                pred[i, :] = model(s)
+                #weights[i] = 1 / len(s)
+                weights[i] = 1
+            rb = rb.long().to(device)
+            loss = F.cross_entropy(pred, rb)
+            #print(f"{pred} - {rb}")
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            
         
-
-        loss.backward()
-        """
-        for p in model.pRules:
-            print(p.W.grad)
-        print(model.tRules.weight.grad)
-        print(f"{r.item()} - {pred.item()}")
-        """
-        #print(f"{r.item()} - {pred.item()}")
-        optimizer.step()
-        optimizer.zero_grad()
-    print(f"Acc: {count_correct / count_total}")
-
-for p in model.pRules:
-    print(p.W)
-print(model.tRules.weight)
-print(model.map)
+    with torch.no_grad():
+        def compute_and_print_accuracy(dl, msg):
+            count_correct = 0
+            count_total = 0
+            for sb, rb in dl:
+                pred = torch.zeros(len(sb), 2)
+                for i, s in enumerate(sb):
+                    pred[i, :] = model(s)
+                rb.to(device)
+                count_total += len(sb)
+                count_correct += (torch.argmax(pred, dim=1) == rb).sum()
+            print(f"{msg} Acc: {count_correct / count_total}")
+        compute_and_print_accuracy(dl_test, "test")
+        compute_and_print_accuracy(dl_train, "train")
+        
