@@ -5,38 +5,75 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import math
+
+SEED = 2024
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, d_model, vocab_size=5000, dropout=0.1):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(vocab_size, d_model)
+        position = torch.arange(0, vocab_size, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float()
+            * (-math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x):
+        # print(self.pe.shape, x.shape)
+        x = x + self.pe[:, : x.size(1), :]
+        return self.dropout(x)
+
 
 class TransformerClassifier(nn.Module):
-    def __init__(self, input_size, hidden_size, num_classes, num_layers, nhead):
+    def __init__(self, input_size, d_model, num_classes, num_layers, nhead, dim_feedforward, dropout):
         super(TransformerClassifier, self).__init__()
+        self.d_model = d_model
+        self.embedding = nn.Embedding(input_size, d_model)
 
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=hidden_size, nhead=nhead),
-            num_layers=num_layers
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward, dropout=dropout)
+
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+
+        self.pos_encoder = PositionalEncoding(
+            d_model=d_model,
+            dropout=dropout,
         )
-        self.fc = nn.Linear(hidden_size, num_classes)
+        self.linear = nn.Linear(d_model, num_classes)
+        self.init_weights()
 
-    def forward(self, x, mask=None):
-        # print(x.shape)
-        x = self.embedding(x)
-        # print(x.shape)
+    def init_weights(self):
+        initrange = 0.1
+        self.embedding.weight.data.uniform_(-initrange, initrange)
+        self.linear.bias.data.zero_()
+        self.linear.weight.data.uniform_(-initrange, initrange)
+
+    def forward(self, x):
+        x = self.embedding(x) * math.sqrt(self.d_model)
+        x = self.pos_encoder(x)
         x = self.transformer_encoder(x)
-        # print(x.shape)
         x = x.mean(dim=1)  # Aggregate across the sequence dimension
-        # print(x.shape)
-        x = self.fc(x)
-        # print(x)
-        x = torch.softmax(x, dim=1)
-        # print(x)
+        x = self.linear(x)
         return x
 
 # Hyperparameters
 input_size = 4  # 'a', 'b', and padding
-hidden_size = 16
+d_model = 16
+dim_feedforward = 64
 nhead = 1
 num_classes = 2  # Binary classification (0 or 1)
 num_layers = 1
+dropout = 0.1
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 path = "test_dataset.json"
@@ -45,14 +82,14 @@ dataset = CFGDataset(path)
 train_dataset, test_dataset = random_split(dataset, [1600, 400])
 trainloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
 test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
-model = TransformerClassifier(input_size, hidden_size, num_classes, num_layers, nhead).to(device)
+model = TransformerClassifier(input_size, d_model, num_classes, num_layers, nhead, dim_feedforward, dropout).to(device)
 
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Training loop
-epochs = 50
+epochs = 100
 epoch_losses = []
 for epoch in range(epochs):
     batch_loss = []
