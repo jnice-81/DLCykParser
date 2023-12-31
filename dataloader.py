@@ -4,16 +4,16 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-char_to_index = {'a': 1, 'b': 2}
+char_to_index = {'<pad>': 0, '<eos>': 1, 'a': 2, 'b': 3}
 
 class CFGDataset(Dataset):
     def __init__(self, dataset_path, padding=True):
         with open(dataset_path, "r") as file:
             dataset = json.load(file)
         # self.positive_samples = dataset["pos"]
-        self.positive_samples = [[char_to_index[char] for char in sequence] for sequence in dataset["pos"]]
+        self.positive_samples = [[char_to_index[char] for char in sequence] + [char_to_index['<eos>']] for sequence in dataset["pos"]]
         # self.negative_samples = dataset["neg"]
-        self.negative_samples = [[char_to_index[char] for char in sequence] for sequence in dataset["neg"]]
+        self.negative_samples = [[char_to_index[char] for char in sequence] + [char_to_index['<eos>']] for sequence in dataset["neg"]]
 
         # Pad sequences to the same length
         if padding:
@@ -46,9 +46,9 @@ def main():
     mean_length = np.mean(text_lengths)
     std_dev = np.std(text_lengths)
 
-    # Define the interval (mean ± 1 standard deviation)
-    lower_bound = mean_length - 2*std_dev
-    upper_bound = mean_length + 2*std_dev
+    # Define the interval (mean ± 2 standard deviation)
+    lower_bound = mean_length - 2 * std_dev
+    upper_bound = mean_length + 2 * std_dev
 
     # Plotting the histogram with mean and interval lines
     plt.hist(text_lengths, bins=30, color='blue', edgecolor='black')
@@ -64,4 +64,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
