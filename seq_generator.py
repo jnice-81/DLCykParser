@@ -3,6 +3,7 @@ import ruleset
 import json
 import sys
 import os
+import argparse
 
 
 sys.setrecursionlimit(20000)
@@ -75,38 +76,34 @@ def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset,
         l = 0
         pos_sample = ""
         neg_sample = ""
-        while l < min_length or l > max_length or pos_sample in result["pos"]:
+        while l < min_length or l > max_length or pos_sample in result["pos"] or (mode == "test" and pos_sample in train_data["pos"]):
             pos_sample = generate_random_sequence(grammar.rules, grammar.start_symbol, max_length // 2, mode)
             l = len(pos_sample)
             inc_repeats()
         repeats = 0
-        while neg_sample in result["neg"] or neg_sample == "":
+        while neg_sample in result["neg"] or neg_sample == "" or (mode == "test" and neg_sample in train_data["neg"]):
             neg_sample = generate_invalid_sequence(grammar.symbols, grammar.rules, l, mode)
             inc_repeats()
         repeats = 0
-        if (mode == "train" or (mode == "test" and pos_sample not in train_data["pos"])):
-            result['pos'].add(pos_sample)
-        if (mode == "train" or (mode == "test" and neg_sample not in train_data["neg"])):
-            result["neg"].add(neg_sample)
+        result["pos"].add(pos_sample)
+        result["neg"].add(neg_sample)
     result["pos"] = list(result["pos"])
     result["neg"] = list(result["neg"])
     result["symbols"] = grammar.symbols
     return result
 
-def create_dataset(min_length, max_train_length, max_test_length, num_train_samples, num_id_samples,
+def create_dataset(min_train_length, max_train_length, min_test_length, max_test_length, num_train_samples, num_id_samples,
                    num_ood_samples, loc_grammar, loc_dataset_dir):
     grammar = ruleset.Ruleset()
     grammar.load(loc_grammar)
 
-    train_data = generate_data(min_length, max_train_length, num_train_samples, grammar, "train")
+    train_data = generate_data(min_train_length, max_train_length, num_train_samples, grammar, "train")
     non_terminals = list(grammar.rules.keys())
 
     for nt in non_terminals:
         if (grammar.rules[nt] == []):
             grammar.rules.pop(nt)
             continue
-
-        print(nt, grammar.rules[nt])
 
     # omit unproductive rules from test sets
     for nt in non_terminals:
@@ -120,49 +117,50 @@ def create_dataset(min_length, max_train_length, max_test_length, num_train_samp
     
 
     # not sure how to export/save the data yet, will be completed later
-    ood_test = generate_data(max_train_length+1, max_test_length, num_ood_samples, grammar, "test", train_data)
-    test_data = generate_data(min_length, max_train_length, num_id_samples, grammar, "test", train_data)
-
-    dataset = {}
-    dataset["train"] = train_data
-    dataset["test_id"] = test_data
-    dataset["test_ood"] = ood_test
+    test_data = generate_data(min_train_length, max_train_length, num_id_samples, grammar, "test", train_data)
+    ood_test = generate_data(min_test_length, max_test_length, num_ood_samples, grammar, "test", train_data)
     
+    os.makedirs(loc_dataset_dir, exist_ok=True)
+    with open(os.path.join(loc_dataset_dir, "train.json"), "w") as f:
+        json.dump(train_data, f, indent=4)
+    with open(os.path.join(loc_dataset_dir, "test_id.json"), "w") as f:
+        json.dump(test_data, f, indent=4)
     with open(os.path.join(loc_dataset_dir, "test_ood.json"), "w") as f:
-        json.dump(dataset, f, indent=4)
-
-#create_dataset(10, 20, 200, "test_rules.json", "export2.json")
-
-"""
-def main():
-    # Define your grammar in CNF
-    cnf_grammar = ruleset.Ruleset()
-    cnf_grammar.load("test_rules.json")
-    # cnf_grammar = {
-    #     'S': ["AE","BF"],
-    #     'G': ["GG","a","b","AB"],
-    #     'E': ["GA","a"],
-    #     'F': ["GB","b"],
-    #     'A': ["a"],
-    #     'B': ["b"]
-    # }
+        json.dump(ood_test, f, indent=4)
 
 
-    # Generate a random valid sequence
-    random_sequence = generate_random_sequence(cnf_grammar.rules, cnf_grammar.start_symbol)
-    print(f"Random Valid Sequence: {random_sequence}")
-
-   # Generate a random invalid sequence
-    invalid_sequence = generate_invalid_sequence(cnf_grammar.symbols, len(random_sequence))
-    while cyk_parse(invalid_sequence, cnf_grammar.rules):    
-        invalid_sequence = generate_invalid_sequence(cnf_grammar.symbols, len(random_sequence))
-    
-    print(f"Random Invalid Sequence: {invalid_sequence}")
+create_dataset(4, 8, 12, 16, 50, 10, 10, "test_rules.json", "datasets/output/")
 
 if __name__ == "__main__":
-    main()
-"""
+    #create_dataset(1, 15, 200, 2500, 500, 250, "grammars/binary_tree/test.json", "datasets/binary_tree/")
+    parser = argparse.ArgumentParser(description="Create a dataset with specified parameters")
 
-if __name__ == "__main__":
-    create_dataset(1, 15, 200, 2500, 500, 250, "grammars/binary_tree/test.json", "datasets/binary_tree/")
-# create_dataset(2, 100, 1000, "test_rules.json", "test_dataset.json")
+    # Positional arguments
+    parser.add_argument("min_train_length", type=int)
+    parser.add_argument("max_train_length", type=int)
+    parser.add_argument("min_test_length", type=int)
+    parser.add_argument("max_test_length", type=int)
+    parser.add_argument("num_train_samples", type=int)
+    parser.add_argument("num_id_samples", type=int)
+    parser.add_argument("num_ood_samples", type=int)
+    parser.add_argument("loc_grammar", type=str)
+    parser.add_argument("loc_dataset_dir", type=str)
+
+    # Named arguments
+    parser.add_argument("--min_train_length", type=int)
+    parser.add_argument("--max_train_length", type=int)
+    parser.add_argument("--min_test_length", type=int)
+    parser.add_argument("--max_test_length", type=int)
+    parser.add_argument("--num_train_samples", type=int)
+    parser.add_argument("--num_id_samples", type=int)
+    parser.add_argument("--num_ood_samples", type=int)
+    parser.add_argument("--loc_grammar", type=str)
+    parser.add_argument("--loc_dataset_dir", type=str)
+
+    args = parser.parse_args()
+
+    args = parser.parse_args()
+
+    create_dataset(args.min_train_length, args.max_train_length, args.min_test_length, args.max_test_length,
+                   args.num_train_samples, args.num_id_samples, args.num_ood_samples, args.loc_grammar,
+                   args.loc_dataset_dir)
