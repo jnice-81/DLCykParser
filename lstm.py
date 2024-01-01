@@ -28,7 +28,7 @@ test_ood_dataloader = DataLoader(dataset=test_ood_data, batch_size=batchsize, sh
 
 
 
-input_dim = 200 #or 99? 
+input_dim = 200 
 hidden_size = 512
 num_layers = 2
 num_classes = 2
