@@ -4,16 +4,17 @@ import json
 import sys
 import os
 import argparse
+import math
 
 
-sys.setrecursionlimit(20000)
+sys.setrecursionlimit(2000)
 # random.seed(0) # Set the seed in real generation for reproducibility
 def generate_random_sequence(grammar, symbol, max_depth, mode, depth = 0):
     if symbol in grammar:  # Check if the symbol is in the grammar
         production = None
         if depth >= max_depth:
             for p in grammar[symbol]:
-                if not isinstance(p[0], list):
+                if len(p[0]) == 1:
                     production = p
                     p[1] = True
                     break
@@ -77,7 +78,7 @@ def generate_data(min_length, max_length, num_samples, grammar: ruleset.Ruleset,
         pos_sample = ""
         neg_sample = ""
         while l < min_length or l > max_length or pos_sample in result["pos"] or (mode == "test" and pos_sample in train_data["pos"]):
-            pos_sample = generate_random_sequence(grammar.rules, grammar.start_symbol, max_length // 2, mode)
+            pos_sample = generate_random_sequence(grammar.rules, grammar.start_symbol, int(math.log2(max_length)) + 1, mode)
             l = len(pos_sample)
             inc_repeats()
         repeats = 0
@@ -114,12 +115,12 @@ def create_dataset(min_train_length, max_train_length, min_test_length, max_test
             if (not rule[1]):
                 removed += 1
                 grammar.rules[nt].remove(rule)
-    
 
     # not sure how to export/save the data yet, will be completed later
     test_data = generate_data(min_train_length, max_train_length, num_id_samples, grammar, "test", train_data)
     ood_test = generate_data(min_test_length, max_test_length, num_ood_samples, grammar, "test", train_data)
     
+    print(loc_dataset_dir)
     os.makedirs(loc_dataset_dir, exist_ok=True)
     with open(os.path.join(loc_dataset_dir, "train.json"), "w") as f:
         json.dump(train_data, f, indent=4)
@@ -127,9 +128,6 @@ def create_dataset(min_train_length, max_train_length, min_test_length, max_test
         json.dump(test_data, f, indent=4)
     with open(os.path.join(loc_dataset_dir, "test_ood.json"), "w") as f:
         json.dump(ood_test, f, indent=4)
-
-
-create_dataset(4, 8, 12, 16, 50, 10, 10, "test_rules.json", "datasets/output/")
 
 if __name__ == "__main__":
     #create_dataset(1, 15, 200, 2500, 500, 250, "grammars/binary_tree/test.json", "datasets/binary_tree/")
@@ -145,19 +143,6 @@ if __name__ == "__main__":
     parser.add_argument("num_ood_samples", type=int)
     parser.add_argument("loc_grammar", type=str)
     parser.add_argument("loc_dataset_dir", type=str)
-
-    # Named arguments
-    parser.add_argument("--min_train_length", type=int)
-    parser.add_argument("--max_train_length", type=int)
-    parser.add_argument("--min_test_length", type=int)
-    parser.add_argument("--max_test_length", type=int)
-    parser.add_argument("--num_train_samples", type=int)
-    parser.add_argument("--num_id_samples", type=int)
-    parser.add_argument("--num_ood_samples", type=int)
-    parser.add_argument("--loc_grammar", type=str)
-    parser.add_argument("--loc_dataset_dir", type=str)
-
-    args = parser.parse_args()
 
     args = parser.parse_args()
 

@@ -1,4 +1,3 @@
-from logging import warn
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -6,6 +5,9 @@ from torch.utils import data
 import json
 from torch import optim
 import tqdm
+import os
+import csv
+import sys
 
 class ResBlock(nn.Module):
     def __init__(self, dim) -> None:
@@ -54,7 +56,6 @@ class NCykParser(nn.Module):
         self.prule = PRule(rule_count)
         self.tRules = nn.Embedding(len(symbols), rule_count)
         self.map = {sym: i for i, sym in enumerate(symbols)}
-        self.topl = ResBlock(rule_count)
         self.ltopl = nn.Linear(rule_count, 2)
 
     def apply_rule(self, s):
@@ -85,7 +86,7 @@ class NCykParser(nn.Module):
         self.cache = {}
 
         emb = self.intern_forward(s)
-        result = self.ltopl(self.topl(emb))
+        result = self.ltopl(emb)
 
         return result
 
@@ -107,48 +108,65 @@ class GrammarDataset(data.Dataset):
             return self.neg[index - len(self.pos)], torch.tensor(0.0, dtype=torch.float32)
         else:
             return self.pos[index], torch.tensor(1.0, dtype=torch.float32)
+        
+def compute_and_log_accuracy(dl, msg):
+    count_correct = 0
+    count_total = 0
+    for sb, rb in tqdm.tqdm(dl, msg):
+        pred = torch.zeros(len(sb), 2)
+        for i, s in enumerate(sb):
+            pred[i, :] = model(s)
+        rb.to(device)
+        count_total += len(sb)
+        count_correct += (torch.argmax(pred, dim=1) == rb).sum()
+    acc = count_correct / count_total
+    print(f"{msg} Acc: {acc}")
+    return acc
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
 
-ds = GrammarDataset("export2.json")
-len_train_set = int(0.8 * len(ds))
-test_ds, train_ds = data.random_split(ds, (len(ds) - len_train_set, len_train_set), torch.Generator().manual_seed(36))
-dl_train = data.DataLoader(train_ds, 10, True)
+base_folder = sys.argv[1]
+num_rules = int(sys.argv[2])
+
+
+train_ds = GrammarDataset(os.path.join(base_folder, "train.json"))
+test_ds = GrammarDataset(os.path.join(base_folder, "test_id.json"))
+ood_ds = GrammarDataset(os.path.join(base_folder, "test_ood.json"))
+dl_train = data.DataLoader(train_ds, 1, True)
 dl_test = data.DataLoader(test_ds, 1, True)
-model = NCykParser(4, ds.symbols)
+dl_test_ood = data.DataLoader(ood_ds, 1, True)
+model = NCykParser(num_rules, train_ds.symbols)
 model.to(device)
 optimizer = optim.AdamW(model.parameters(), lr=0.001)
 
-for epoch in range(100):
-    for _ in range(5):
-        for sb, rb in tqdm.tqdm(dl_train):
-            pred = torch.zeros(len(sb), 2, device=device)
-            weights = torch.zeros(len(sb))
-            for i, s in enumerate(sb):
-                pred[i, :] = model(s)
-                #weights[i] = 1 / len(s)
-                weights[i] = 1
-            rb = rb.long().to(device)
-            loss = F.cross_entropy(pred, rb)
-            #print(f"{pred} - {rb}")
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+with open(os.path.join(base_folder, f"ncykv2({num_rules} rules).csv"), "w", newline='') as log:
+    csv_writer = csv.writer(log)
+    csv_writer.writerow(["valid", "train", "ood"])
+
+for epoch in range(10):
+    model.train()
+    for sb, rb in tqdm.tqdm(dl_train):
+        pred = torch.zeros(len(sb), 2, device=device)
+        weights = torch.zeros(len(sb))
+        for i, s in enumerate(sb):
+            pred[i, :] = model(s)
+            #weights[i] = 1 / len(s)
+            weights[i] = 1
+        rb = rb.long().to(device)
+        loss = F.cross_entropy(pred, rb)
+        #print(f"{pred} - {rb}")
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
             
-        
+    model.eval()
     with torch.no_grad():
-        def compute_and_print_accuracy(dl, msg):
-            count_correct = 0
-            count_total = 0
-            for sb, rb in dl:
-                pred = torch.zeros(len(sb), 2)
-                for i, s in enumerate(sb):
-                    pred[i, :] = model(s)
-                rb.to(device)
-                count_total += len(sb)
-                count_correct += (torch.argmax(pred, dim=1) == rb).sum()
-            print(f"{msg} Acc: {count_correct / count_total}")
-        compute_and_print_accuracy(dl_test, "test")
-        compute_and_print_accuracy(dl_train, "train")
-        
+        acc_test = compute_and_log_accuracy(dl_test, "valid")
+        acc_train = compute_and_log_accuracy(dl_train, "train")
+        acc_ood = compute_and_log_accuracy(dl_test_ood, "ood")
+        with open(os.path.join(base_folder, "ncykv2log.csv"), "a", newline='') as log:
+            csv_writer = csv.writer(log)
+            csv_writer.writerow([acc_test.item(), acc_train.item(), acc_ood.item()])
+
+log.close()
