@@ -8,18 +8,27 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 from torch.autograd import Variable 
 
+
+
+
+
+
 batchsize = 25 # how many samples the network sees before it updates itself
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-path = "test_dataset.json"
-dataset = CFGDataset(path)
-training_data, test_data = random_split(dataset, [1600, 400])
+path = "datasets/binary_tree/test_ood.json"
 
+training_data = CFGDataset(path, "train")
 train_dataloader = DataLoader(dataset=training_data, batch_size=batchsize, shuffle=True)
-test_dataloader =  DataLoader(dataset=test_data, batch_size=batchsize, shuffle=True)
+
+test_id_data = CFGDataset(path, "test_id")
+test_id_dataloader = DataLoader(dataset=test_id_data, batch_size=batchsize, shuffle=True)
+
+test_ood_data = CFGDataset(path, "test_ood")
+test_ood_dataloader = DataLoader(dataset=test_ood_data, batch_size=batchsize, shuffle=True)
 
 
 
-input_dim = 99 #or 99? 
+input_dim = 200 #or 99? 
 hidden_size = 512
 num_layers = 2
 num_classes = 2
@@ -38,12 +47,12 @@ class LSTM(nn.Module):
         self.lstm = nn.LSTM(input_dim, hidden_size, num_layers, batch_first=True)
         self.batchsize = batchsize
         self.output_layer = nn.Linear(hidden_size, num_classes) #fully connected last layer
-        #self.dropout = nn.Dropout(0.2)
+        self.dropout = nn.Dropout(0.3)
         
 
     def forward(self,x):
         #x = self.embedding(x)
-        #x = self.dropout(x)
+        x = self.dropout(x)
         h_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #hidden state
         c_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #internal state
         # Propagate input through LSTM
@@ -125,4 +134,8 @@ arr = train(num_epochs, model, train_dataloader, loss_func, arrTrain)
 #on training set
 test_loop(train_dataloader, model, loss_func, adam)
 #validatio set
-test_loop(test_dataloader, model, loss_func, adam)
+test_loop(test_id_dataloader, model, loss_func, adam)
+
+test_loop(test_ood_dataloader, model, loss_func, adam)
+
+np.savetxt('arrTrain.csv', arrTrain, delimiter=",")

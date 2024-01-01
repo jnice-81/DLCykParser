@@ -36,9 +36,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 path = "datasets/binary_tree/test_ood.json"
 
-batchsize = 1
 
 training_data = CFGDataset(path, "train")
+train_dataloader = DataLoader(dataset=training_data, batch_size=batchsize, shuffle=True)
 train_dataloader = DataLoader(dataset=training_data, batch_size=batchsize, shuffle=True)
 
 test_id_data = CFGDataset(path, "test_id")
