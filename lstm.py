@@ -47,12 +47,12 @@ class LSTM(nn.Module):
         self.lstm = nn.LSTM(input_dim, hidden_size, num_layers, batch_first=True)
         self.batchsize = batchsize
         self.output_layer = nn.Linear(hidden_size, num_classes) #fully connected last layer
-        self.dropout = nn.Dropout(0.3)
+        #self.dropout = nn.Dropout(0.3)
         
 
     def forward(self,x):
         #x = self.embedding(x)
-        x = self.dropout(x)
+        #x = self.dropout(x)
         h_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #hidden state
         c_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #internal state
         # Propagate input through LSTM
@@ -78,10 +78,12 @@ sgd = optim.SGD(model.parameters(), lr=learning_rate)
 adam = optim.Adam(model.parameters(), lr=learning_rate)
 
 
-def train(num_epochs, model, train_dataloader, loss_func, arr):
+def train(num_epochs, model, train_dataloader, loss_func, arr, arr_id, arr_ood):
     total_steps = len(train_dataloader)
     correct = 0
     for epoch in range(num_epochs):
+        
+        
         for batch, (x_batch, y_batch) in enumerate(train_dataloader):
             #x_batch must have dim 3: torch.Size([50, 1, 3]) (additional param timestamp)
             #y_batch must have dim 2: torch.Size([50, 1])
@@ -97,17 +99,34 @@ def train(num_epochs, model, train_dataloader, loss_func, arr):
             
             loss.backward()
             adam.step()
-            correct += (output.argmax(1) == y_batch).type(torch.float).sum().item()
-            
-            #if(batch)%100 == 0:
-            #    print(f"Epoch: {epoch+1}; Batch: {batch+1} / {total_steps}; Loss: {loss.item():>4f}")
+            #to have a better/more comparable starting number for the loss and accuracy plot(after one batch it would otherwise already have accuracy 80% which is tru,e but compared to the nureocyk it 
+            #technically did way more after one epoch, so i just put it like that)
+            if(batch == 1 and (epoch==0 or epoch == 1)):
+                l_train, a_train = test_loop(train_dataloader, model, loss_func, adam)
+                arr[0][epoch] = a_train
+                arr[1][epoch] = l_train
+                l_id, a_id = test_loop(test_id_dataloader, model, loss_func, adam)
+                arr_id[0][epoch] = a_id
+                arr_id[1][epoch] = l_id
+                l_ood, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
+                arr_ood[0][epoch] = a_ood
+                arr_ood[1][epoch] = l_ood
+
+
+        if(epoch > 1):
+            l_train, a_train = test_loop(train_dataloader, model, loss_func, adam)
+            arr[0][epoch] = a_train
+            arr[1][epoch] = l_train
+            #for plots, to have accuracy after each epoch:
+            l_id, a_id = test_loop(test_id_dataloader, model, loss_func, adam)
+            arr_id[0][epoch] = a_id
+            arr_id[1][epoch] = l_id
+            l_ood, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
+            arr_ood[0][epoch] = a_ood
+            arr_ood[1][epoch] = l_ood
         
-        correct /= (total_steps * batchsize)
-        print(f"Epoch: {epoch+1}; Loss: {loss.item():>4f}")
-        #print(100*correct)
-        arr[0][epoch] = 100*correct
-        arr[1][epoch] = loss.item()
-    return arr
+
+    return arr, arr_id, arr_ood
 
 def test_loop(dataloader, model, loss_func, optimizer):
     size= len(dataloader.dataset)
@@ -126,11 +145,12 @@ def test_loop(dataloader, model, loss_func, optimizer):
     test_loss /= num_batches
     correct /= size
     print(f"Test Error:\n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}\n")
-    return 100*correct
+    return test_loss, 100*correct
 
-arrTrain = np.empty((2, num_epochs))
-arrVal = np.empty((2, num_epochs))
-arr = train(num_epochs, model, train_dataloader, loss_func, arrTrain)
+arrTrain = np.empty((2, num_epochs)) #test on the same dataset as trianing -> 100% to overfit
+arr_id = np.empty((2, num_epochs))
+arr_ood = np.empty((2, num_epochs))
+arr = train(num_epochs, model, train_dataloader, loss_func, arrTrain, arr_id, arr_ood)
 #on training set
 test_loop(train_dataloader, model, loss_func, adam)
 #validatio set
@@ -138,4 +158,6 @@ test_loop(test_id_dataloader, model, loss_func, adam)
 
 test_loop(test_ood_dataloader, model, loss_func, adam)
 
-np.savetxt('arrTrain.csv', arrTrain, delimiter=",")
+#np.savetxt('lstm_csvForPlot/arrTrain.csv', arrTrain, delimiter=",")
+#np.savetxt('lstm_csvForPlot/arr_id.csv', arr_id, delimiter=",")
+#np.savetxt('lstm_csvForPlot/arr_ood.csv', arr_ood, delimiter=",")
