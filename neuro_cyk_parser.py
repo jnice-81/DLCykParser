@@ -140,7 +140,8 @@ model = NCykParser(num_rules, train_ds.symbols)
 model.to(device)
 optimizer = optim.AdamW(model.parameters(), lr=0.001)
 
-with open(os.path.join(base_folder, f"ncykv2({num_rules} rules).csv"), "w", newline='') as log:
+logfilename = f"ncykv2({num_rules} rules).csv"
+with open(os.path.join(base_folder, logfilename), "w", newline='') as log:
     csv_writer = csv.writer(log)
     csv_writer.writerow(["valid", "train", "ood"])
 
@@ -165,7 +166,7 @@ for epoch in range(10):
         acc_test = compute_and_log_accuracy(dl_test, "valid")
         acc_train = compute_and_log_accuracy(dl_train, "train")
         acc_ood = compute_and_log_accuracy(dl_test_ood, "ood")
-        with open(os.path.join(base_folder, "ncykv2log.csv"), "a", newline='') as log:
+        with open(os.path.join(base_folder, logfilename), "a", newline='') as log:
             csv_writer = csv.writer(log)
             csv_writer.writerow([acc_test.item(), acc_train.item(), acc_ood.item()])
 
