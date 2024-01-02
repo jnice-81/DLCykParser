@@ -4,20 +4,21 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-char_to_index = {'a': 1, 'b': 2}
+char_to_index = {'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': 6, 'g': 7, 'h': 8, 'i': 9, 'j': 10,
+                 'k': 11, 'l': 12, 'm': 13, 'n': 14, 'o': 15, 'p': 16, 'q': 17, 'r': 18, 's': 19,
+                 't': 20, 'u': 21, 'v': 22, 'w': 23, 'x': 24, 'y': 25, 'z': 26}
 
 class CFGDataset(Dataset):
-    def __init__(self, dataset_path, padding=True):
+    def __init__(self, dataset_path, data_type, padding=True):
         with open(dataset_path, "r") as file:
             dataset = json.load(file)
-        # self.positive_samples = dataset["pos"]
-        self.positive_samples = [[char_to_index[char] for char in sequence] for sequence in dataset["pos"]]
-        # self.negative_samples = dataset["neg"]
-        self.negative_samples = [[char_to_index[char] for char in sequence] for sequence in dataset["neg"]]
+        self.positive_samples = [[char_to_index[char] for char in sequence] for sequence in dataset[data_type]["pos"]]
+        self.negative_samples = [[char_to_index[char] for char in sequence] for sequence in dataset[data_type]["neg"]]
 
         # Pad sequences to the same length
         if padding:
-            max_length = max([len(sequence) for sequence in self.positive_samples + self.negative_samples])
+            #max_length = max([len(sequence) for sequence in self.positive_samples + self.negative_samples])
+            max_length = 200
             for sequence in self.positive_samples:
                 sequence += [0] * (max_length - len(sequence))
             for sequence in self.negative_samples:
@@ -46,9 +47,9 @@ def main():
     mean_length = np.mean(text_lengths)
     std_dev = np.std(text_lengths)
 
-    # Define the interval (mean ± 1 standard deviation)
-    lower_bound = mean_length - 2*std_dev
-    upper_bound = mean_length + 2*std_dev
+    # Define the interval (mean ± 2 standard deviation)
+    lower_bound = mean_length - 2 * std_dev
+    upper_bound = mean_length + 2 * std_dev
 
     # Plotting the histogram with mean and interval lines
     plt.hist(text_lengths, bins=30, color='blue', edgecolor='black')
@@ -64,4 +65,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
