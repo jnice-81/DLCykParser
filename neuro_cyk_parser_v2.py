@@ -91,11 +91,12 @@ class NCykParser(nn.Module):
         return result
 
 class GrammarDataset(data.Dataset):
-    def __init__(self, file) -> None:
+    def __init__(self, file, type) -> None:
         super().__init__()
 
         with open(file, "r") as f:
             l = json.load(f)
+        l = l[type]
         self.pos = l["pos"]
         self.neg = l["neg"]
         self.symbols = l["symbols"]
@@ -130,9 +131,9 @@ base_folder = sys.argv[1]
 num_rules = int(sys.argv[2])
 
 
-train_ds = GrammarDataset(os.path.join(base_folder, "train.json"))
-test_ds = GrammarDataset(os.path.join(base_folder, "test_id.json"))
-ood_ds = GrammarDataset(os.path.join(base_folder, "test_ood.json"))
+train_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "train")
+test_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "test_id")
+ood_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "test_ood")
 dl_train = data.DataLoader(train_ds, 1, True)
 dl_test = data.DataLoader(test_ds, 1, True)
 dl_test_ood = data.DataLoader(ood_ds, 1, True)
