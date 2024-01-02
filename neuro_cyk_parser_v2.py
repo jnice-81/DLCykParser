@@ -129,7 +129,7 @@ device = torch.device('cpu')
 
 base_folder = sys.argv[1]
 num_rules = int(sys.argv[2])
-
+logfilename = f"ncykv2({num_rules} rules).csv"
 
 train_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "train")
 test_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "test_id")
@@ -141,7 +141,6 @@ model = NCykParser(num_rules, train_ds.symbols)
 model.to(device)
 optimizer = optim.AdamW(model.parameters(), lr=0.001)
 
-logfilename = f"ncykv2({num_rules} rules).csv"
 with open(os.path.join(base_folder, logfilename), "w", newline='') as log:
     csv_writer = csv.writer(log)
     csv_writer.writerow(["valid", "train", "ood"])

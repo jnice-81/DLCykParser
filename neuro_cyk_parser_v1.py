@@ -5,6 +5,9 @@ from torch.utils import data
 import json
 from torch import optim
 import tqdm
+import csv
+import os
+import sys
 
 class ProdRule(nn.Module):
     def __init__(self, rule_count) -> None:
@@ -60,11 +63,12 @@ class NCykParser(nn.Module):
         return result[0].unsqueeze(0)
 
 class GrammarDataset(data.Dataset):
-    def __init__(self, file) -> None:
+    def __init__(self, file, type) -> None:
         super().__init__()
 
         with open(file, "r") as f:
             l = json.load(f)
+        l = l[type]
         self.pos = l["pos"]
         self.neg = l["neg"]
         self.symbols = l["symbols"]
@@ -77,22 +81,44 @@ class GrammarDataset(data.Dataset):
             return self.neg[index - len(self.pos)], torch.tensor(0.0, dtype=torch.float32)
         else:
             return self.pos[index], torch.tensor(1.0, dtype=torch.float32)
+        
+def compute_and_log_accuracy(dl, msg):
+    count_correct = 0
+    count_total = 0
+    for sb, rb in tqdm.tqdm(dl, msg):
+        pred = torch.zeros(len(sb), 2)
+        for i, s in enumerate(sb):
+            pred[i, :] = model(s)
+        rb.to(device)
+        count_total += len(sb)
+        count_correct += (torch.argmax(pred, dim=1) == rb).sum()
+    acc = count_correct / count_total
+    print(f"{msg} Acc: {acc}")
+    return acc
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
 
-ds = GrammarDataset("small.json")
-len_train_set = int(0.8 * len(ds))
-test_ds, train_ds = data.random_split(ds, (len(ds) - len_train_set, len_train_set), torch.Generator().manual_seed(36))
+base_folder = sys.argv[1]
+num_rules = int(sys.argv[2])
+logfilename = f"ncykv1({num_rules} rules).csv"
+
+train_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "train")
+test_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "test_id")
+ood_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "test_ood")
 dl_train = data.DataLoader(train_ds, 1, True)
 dl_test = data.DataLoader(test_ds, 1, True)
-model = NCykParser(4, ds.symbols)
-model2 = NCykParser(4, ds.symbols)
+dl_test_ood = data.DataLoader(ood_ds, 1, True)
+model = NCykParser(num_rules, train_ds.symbols)
 model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-for epoch in range(100):
-    for _ in range(4):
+with open(os.path.join(base_folder, logfilename), "w", newline='') as log:
+    csv_writer = csv.writer(log)
+    csv_writer.writerow(["valid", "train", "ood"])
+
+for epoch in range(10):
+    for _ in range(2):
         for sb, rb in tqdm.tqdm(dl_train):
             pred = torch.zeros(len(sb))
             weights = torch.zeros(len(sb))
@@ -106,40 +132,17 @@ for epoch in range(100):
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-            
+            break
         
     with torch.no_grad():
         for p in model.pRules:
             p.W[p.W < 0] = 0
         model.tRules.weight[model.tRules.weight < 0] = 0
 
-
-        """
-        for p, w in zip(model.pRules, model2.pRules):
-            w.W = p.W.clone()
-            w.W[w.W < 1] = 0
-            w.W[w.W > 1] = 1
-            print(p.W)
-        model2.tRules.weight = model.tRules.weight.clone()
-        model2.tRules.weight[model2.tRules.weight < 1] = 0
-        model2.tRules.weight[model2.tRules.weight > 1] = 1
-        print(model.tRules.weight)
-        """
-
-        def compute_and_print_accuracy(dl, msg):
-            count_correct = 0
-            count_total = 0
-            for sb, rb in dl:
-                pred = torch.zeros(len(sb))
-                for i, s in enumerate(sb):
-                    pred[i] = model(s)
-                rb.to(device)
-                count_total += len(sb)
-                count_correct += torch.logical_or(torch.logical_and(pred < 1, rb == 0), torch.logical_and( pred >= 1, rb == 1)).sum()
-            print(f"{msg} Acc: {count_correct / count_total}")
-        compute_and_print_accuracy(dl_test, "test")
-        #compute_and_print_accuracy(dl_train, "train")
-        for p in model.pRules:
-            print(p.W)
-        print(model.tRules.weight)
-        print(model.map)
+        acc_test = compute_and_log_accuracy(dl_test, "valid")
+        acc_train = compute_and_log_accuracy(dl_train, "train")
+        acc_ood = compute_and_log_accuracy(dl_test_ood, "ood")
+        with open(os.path.join(base_folder, logfilename), "a", newline='') as log:
+            csv_writer = csv.writer(log)
+            csv_writer.writerow([acc_test.item(), acc_train.item(), acc_ood.item()])
+        
