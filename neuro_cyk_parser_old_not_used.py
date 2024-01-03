@@ -118,7 +118,7 @@ with open(os.path.join(base_folder, logfilename), "w", newline='') as log:
     csv_writer.writerow(["valid", "train", "ood"])
 
 for epoch in range(10):
-    for _ in range(2):
+    for _ in range(5):
         for sb, rb in tqdm.tqdm(dl_train):
             pred = torch.zeros(len(sb))
             weights = torch.zeros(len(sb))
@@ -132,15 +132,14 @@ for epoch in range(10):
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-            break
         
     with torch.no_grad():
         for p in model.pRules:
             p.W[p.W < 0] = 0
         model.tRules.weight[model.tRules.weight < 0] = 0
 
-        acc_test = compute_and_log_accuracy(dl_test, "valid")
         acc_train = compute_and_log_accuracy(dl_train, "train")
+        acc_test = compute_and_log_accuracy(dl_test, "valid")
         acc_ood = compute_and_log_accuracy(dl_test_ood, "ood")
         with open(os.path.join(base_folder, logfilename), "a", newline='') as log:
             csv_writer = csv.writer(log)
