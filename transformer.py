@@ -1,11 +1,12 @@
 import torch
 from dataloader import CFGDataset
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import math
+import os
 
 SEED = 2024
 torch.manual_seed(SEED)
@@ -14,12 +15,12 @@ torch.backends.cudnn.deterministic = True
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model, vocab_size=5000, dropout=0.1):
+    def __init__(self, d_model, max_len=200, dropout=0.1):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
-        pe = torch.zeros(vocab_size, d_model)
-        position = torch.arange(0, vocab_size, dtype=torch.float).unsqueeze(1)
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(
             torch.arange(0, d_model, 2).float()
             * (-math.log(10000.0) / d_model)
@@ -45,18 +46,16 @@ class TransformerClassifier(nn.Module):
 
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
 
-        self.pos_encoder = PositionalEncoding(
-            d_model=d_model,
-            dropout=dropout,
-        )
+        self.pos_encoder = PositionalEncoding(d_model=d_model, dropout=dropout)
+        
         self.linear = nn.Linear(d_model, num_classes)
-        self.init_weights()
+    #     self.init_weights()
 
-    def init_weights(self):
-        initrange = 0.1
-        self.embedding.weight.data.uniform_(-initrange, initrange)
-        self.linear.bias.data.zero_()
-        self.linear.weight.data.uniform_(-initrange, initrange)
+    # def init_weights(self):
+    #     initrange = 0.1
+    #     self.embedding.weight.data.uniform_(-initrange, initrange)
+    #     self.linear.bias.data.zero_()
+    #     self.linear.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, x):
         x = self.embedding(x) * math.sqrt(self.d_model)
@@ -67,22 +66,32 @@ class TransformerClassifier(nn.Module):
         return x
 
 # Hyperparameters
-input_size = 4  # 'a', 'b', and padding
-d_model = 16
-dim_feedforward = 64
-nhead = 1
+input_size = 27 # 26 letters + <pad>
+d_model = 50
+dim_feedforward = 50
+nhead = 5
 num_classes = 2  # Binary classification (0 or 1)
-num_layers = 1
+num_layers = 4
 dropout = 0.1
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-path = "test_dataset.json"
+# path = "test_dataset.json"
+path = os.path.join("datasets", "random", "grammar1", "large_ds", "data.json")
 
-dataset = CFGDataset(path)
-train_dataset, test_dataset = random_split(dataset, [1600, 400])
-trainloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+# dataset = CFGDataset(path)
+# train_dataset, test_dataset = random_split(dataset, [1600, 400])
+# trainloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+# test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 model = TransformerClassifier(input_size, d_model, num_classes, num_layers, nhead, dim_feedforward, dropout).to(device)
+
+training_data = CFGDataset(path, "train")
+train_dataloader = DataLoader(dataset=training_data, batch_size=20, shuffle=True)
+
+test_id_data = CFGDataset(path, "test_id")
+test_id_dataloader = DataLoader(dataset=test_id_data, batch_size=1, shuffle=True)
+
+test_ood_data = CFGDataset(path, "test_ood")
+test_ood_dataloader = DataLoader(dataset=test_ood_data, batch_size=1, shuffle=True)
 
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -93,7 +102,7 @@ epochs = 100
 epoch_losses = []
 for epoch in range(epochs):
     batch_loss = []
-    for inputs, targets in tqdm(trainloader):
+    for inputs, targets in tqdm(train_dataloader):
         inputs = inputs.to(device)
         targets = targets.to(device)
         
@@ -117,7 +126,7 @@ plt.show()
 # Test the model
 correct = 0
 with torch.no_grad():
-    for inputs, targets in trainloader:
+    for inputs, targets in train_dataloader:
         inputs = inputs.to(device)
         targets = targets.to(device)
         
@@ -125,11 +134,23 @@ with torch.no_grad():
         predictions = torch.argmax(test_outputs, dim=1)
         correct += (predictions == targets).sum().item()
 
-print(f"Accuracy in training set: {correct / len(train_dataset)}")
+print(f"Accuracy in training set: {correct / len(training_data)}")
+
+# correct = 0
+# with torch.no_grad():
+#     for inputs, targets in test_dataloader:
+#         inputs = inputs.to(device)
+#         targets = targets.to(device)
+        
+#         test_outputs = model(inputs)
+#         predictions = torch.argmax(test_outputs)
+#         correct += (predictions == targets).item()
+
+# print(f"Accuracy in test set: {correct / len(test_dataset)}")
 
 correct = 0
 with torch.no_grad():
-    for inputs, targets in test_dataloader:
+    for inputs, targets in test_id_dataloader:
         inputs = inputs.to(device)
         targets = targets.to(device)
         
@@ -137,4 +158,17 @@ with torch.no_grad():
         predictions = torch.argmax(test_outputs)
         correct += (predictions == targets).item()
 
-print(f"Accuracy in test set: {correct / len(test_dataset)}")
+print(f"ID accuracy: {correct / len(test_id_data)}")
+
+# Test the model
+correct = 0
+with torch.no_grad():
+    for inputs, targets in test_ood_dataloader:
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+        
+        test_outputs = model(inputs)
+        predictions = torch.argmax(test_outputs)
+        correct += (predictions == targets).item()
+
+print(f"OOD accuracy: {correct / len(test_ood_data)}")
