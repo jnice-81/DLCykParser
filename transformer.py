@@ -49,13 +49,6 @@ class TransformerClassifier(nn.Module):
         self.pos_encoder = PositionalEncoding(d_model=d_model, dropout=dropout)
         
         self.linear = nn.Linear(d_model, num_classes)
-    #     self.init_weights()
-
-    # def init_weights(self):
-    #     initrange = 0.1
-    #     self.embedding.weight.data.uniform_(-initrange, initrange)
-    #     self.linear.bias.data.zero_()
-    #     self.linear.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, x):
         x = self.embedding(x) * math.sqrt(self.d_model)
@@ -71,34 +64,31 @@ d_model = 50
 dim_feedforward = 50
 nhead = 5
 num_classes = 2  # Binary classification (0 or 1)
-num_layers = 4
+num_layers = 6
 dropout = 0.1
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # path = "test_dataset.json"
 path = os.path.join("datasets", "random", "grammar1", "large_ds", "data.json")
 
-# dataset = CFGDataset(path)
-# train_dataset, test_dataset = random_split(dataset, [1600, 400])
-# trainloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
-# test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 model = TransformerClassifier(input_size, d_model, num_classes, num_layers, nhead, dim_feedforward, dropout).to(device)
 
 training_data = CFGDataset(path, "train")
-train_dataloader = DataLoader(dataset=training_data, batch_size=20, shuffle=True)
+train_dataloader = DataLoader(dataset=training_data, batch_size=40, shuffle=True)
 
 test_id_data = CFGDataset(path, "test_id")
-test_id_dataloader = DataLoader(dataset=test_id_data, batch_size=1, shuffle=True)
+test_id_dataloader = DataLoader(dataset=test_id_data, batch_size=10, shuffle=True)
 
 test_ood_data = CFGDataset(path, "test_ood")
-test_ood_dataloader = DataLoader(dataset=test_ood_data, batch_size=1, shuffle=True)
+test_ood_dataloader = DataLoader(dataset=test_ood_data, batch_size=10, shuffle=True)
 
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Training loop
-epochs = 100
+model.train()
+epochs = 8000
 epoch_losses = []
 for epoch in range(epochs):
     batch_loss = []
@@ -114,7 +104,7 @@ for epoch in range(epochs):
         batch_loss.append(loss.item())
 
     epoch_loss = sum(batch_loss) / len(batch_loss)
-    epoch_losses.append(sum(batch_loss) / len(batch_loss))
+    epoch_losses.append(epoch_loss)
     print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
 
 # Plot the loss curve
@@ -124,6 +114,7 @@ plt.ylabel("Loss")
 plt.show()
 
 # Test the model
+model.eval()
 correct = 0
 with torch.no_grad():
     for inputs, targets in train_dataloader:
@@ -136,18 +127,6 @@ with torch.no_grad():
 
 print(f"Accuracy in training set: {correct / len(training_data)}")
 
-# correct = 0
-# with torch.no_grad():
-#     for inputs, targets in test_dataloader:
-#         inputs = inputs.to(device)
-#         targets = targets.to(device)
-        
-#         test_outputs = model(inputs)
-#         predictions = torch.argmax(test_outputs)
-#         correct += (predictions == targets).item()
-
-# print(f"Accuracy in test set: {correct / len(test_dataset)}")
-
 correct = 0
 with torch.no_grad():
     for inputs, targets in test_id_dataloader:
@@ -155,8 +134,8 @@ with torch.no_grad():
         targets = targets.to(device)
         
         test_outputs = model(inputs)
-        predictions = torch.argmax(test_outputs)
-        correct += (predictions == targets).item()
+        predictions = torch.argmax(test_outputs, dim=1)
+        correct += (predictions == targets).sum().item()
 
 print(f"ID accuracy: {correct / len(test_id_data)}")
 
@@ -168,7 +147,7 @@ with torch.no_grad():
         targets = targets.to(device)
         
         test_outputs = model(inputs)
-        predictions = torch.argmax(test_outputs)
-        correct += (predictions == targets).item()
+        predictions = torch.argmax(test_outputs, dim=1)
+        correct += (predictions == targets).sum().item()
 
 print(f"OOD accuracy: {correct / len(test_ood_data)}")
