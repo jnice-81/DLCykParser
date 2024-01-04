@@ -9,6 +9,11 @@ import os
 import csv
 import sys
 
+SEED = 2024
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
+
 class ResBlock(nn.Module):
     def __init__(self, dim) -> None:
         super().__init__()
@@ -44,7 +49,7 @@ class PRule(nn.Module):
         t = torch.cat((x, y))
         t = self.b1(t)
         t = self.b11(t)
-        t = self.bt(t)# + t[0:t.shape[0] // 2] + t[t.shape[0] // 2:]
+        t = self.bt(t)
         t = self.b2(t)
         t = self.b22(t)
         return t
@@ -124,7 +129,7 @@ def compute_and_log_accuracy(dl, msg):
     print(f"{msg} Acc: {acc}")
     return acc
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device = torch.device('cpu')
 
 base_folder = sys.argv[1]
@@ -149,14 +154,10 @@ for epoch in range(10):
     model.train()
     for sb, rb in tqdm.tqdm(dl_train):
         pred = torch.zeros(len(sb), 2, device=device)
-        weights = torch.zeros(len(sb))
         for i, s in enumerate(sb):
             pred[i, :] = model(s)
-            #weights[i] = 1 / len(s)
-            weights[i] = 1
         rb = rb.long().to(device)
         loss = F.cross_entropy(pred, rb)
-        #print(f"{pred} - {rb}")
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()

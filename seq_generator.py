@@ -122,12 +122,13 @@ def create_dataset(min_train_length, max_train_length, min_test_length, max_test
     
     print(loc_dataset_dir)
     os.makedirs(loc_dataset_dir, exist_ok=True)
-    with open(os.path.join(loc_dataset_dir, "train.json"), "w") as f:
-        json.dump(train_data, f, indent=4)
-    with open(os.path.join(loc_dataset_dir, "test_id.json"), "w") as f:
-        json.dump(test_data, f, indent=4)
-    with open(os.path.join(loc_dataset_dir, "test_ood.json"), "w") as f:
-        json.dump(ood_test, f, indent=4)
+    g = {}
+    g["train"] = train_data
+    g["test_id"] = test_data
+    g["test_ood"] = ood_test
+
+    with open(os.path.join(loc_dataset_dir, "data.json"), "w") as f:
+        json.dump(g, f, indent=4)
 
 if __name__ == "__main__":
     #create_dataset(1, 15, 200, 2500, 500, 250, "grammars/binary_tree/test.json", "datasets/binary_tree/")
