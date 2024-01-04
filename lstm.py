@@ -11,11 +11,14 @@ from torch.autograd import Variable
 
 
 
-
+SEED = 2024
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+torch.backends.cudnn.deterministic = True
 
 batchsize = 25 # how many samples the network sees before it updates itself
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-path = "datasets/binary_tree/test_ood.json"
+path = "datasets/random/test_ood.json"
 
 training_data = CFGDataset(path, "train")
 train_dataloader = DataLoader(dataset=training_data, batch_size=batchsize, shuffle=True)
@@ -28,11 +31,11 @@ test_ood_dataloader = DataLoader(dataset=test_ood_data, batch_size=batchsize, sh
 
 
 
-input_dim = 200 
+input_dim = 200 #max length of sequence
 hidden_size = 512
 num_layers = 2
 num_classes = 2
-num_epochs = 100
+num_epochs = 500
 learning_rate = 0.002
 
 
@@ -47,12 +50,12 @@ class LSTM(nn.Module):
         self.lstm = nn.LSTM(input_dim, hidden_size, num_layers, batch_first=True)
         self.batchsize = batchsize
         self.output_layer = nn.Linear(hidden_size, num_classes) #fully connected last layer
-        #self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(0.1)
         
 
     def forward(self,x):
         #x = self.embedding(x)
-        #x = self.dropout(x)
+        x = self.dropout(x)
         h_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #hidden state
         c_0 = Variable(torch.zeros(self.num_layers, x.size(0), self.hidden_size)).to(device) #internal state
         # Propagate input through LSTM
@@ -78,7 +81,7 @@ sgd = optim.SGD(model.parameters(), lr=learning_rate)
 adam = optim.Adam(model.parameters(), lr=learning_rate)
 
 
-def train(num_epochs, model, train_dataloader, loss_func, arr, arr_id, arr_ood):
+def train(num_epochs, model, train_dataloader, loss_func, arr):
     total_steps = len(train_dataloader)
     correct = 0
     for epoch in range(num_epochs):
@@ -102,31 +105,24 @@ def train(num_epochs, model, train_dataloader, loss_func, arr, arr_id, arr_ood):
             #to have a better/more comparable starting number for the loss and accuracy plot(after one batch it would otherwise already have accuracy 80% which is tru,e but compared to the nureocyk it 
             #technically did way more after one epoch, so i just put it like that)
             if(batch == 1 and (epoch==0 or epoch == 1)):
-                l_train, a_train = test_loop(train_dataloader, model, loss_func, adam)
+                _ , a_train = test_loop(train_dataloader, model, loss_func, adam)
+                _ , a_id = test_loop(test_id_dataloader, model, loss_func, adam)
+                _, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
                 arr[0][epoch] = a_train
-                arr[1][epoch] = l_train
-                l_id, a_id = test_loop(test_id_dataloader, model, loss_func, adam)
-                arr_id[0][epoch] = a_id
-                arr_id[1][epoch] = l_id
-                l_ood, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
-                arr_ood[0][epoch] = a_ood
-                arr_ood[1][epoch] = l_ood
+                arr[1][epoch] = a_id
+                arr[2][epoch] = a_ood
 
 
         if(epoch > 1):
-            l_train, a_train = test_loop(train_dataloader, model, loss_func, adam)
-            arr[0][epoch] = a_train
-            arr[1][epoch] = l_train
+            _, a_train = test_loop(train_dataloader, model, loss_func, adam)
             #for plots, to have accuracy after each epoch:
-            l_id, a_id = test_loop(test_id_dataloader, model, loss_func, adam)
-            arr_id[0][epoch] = a_id
-            arr_id[1][epoch] = l_id
-            l_ood, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
-            arr_ood[0][epoch] = a_ood
-            arr_ood[1][epoch] = l_ood
-        
+            _, a_id = test_loop(test_id_dataloader, model, loss_func, adam)
+            _, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
+            arr[0][epoch] = a_train
+            arr[1][epoch] = a_id
+            arr[2][epoch] = a_ood
 
-    return arr, arr_id, arr_ood
+    return arr
 
 def test_loop(dataloader, model, loss_func, optimizer):
     size= len(dataloader.dataset)
@@ -147,17 +143,12 @@ def test_loop(dataloader, model, loss_func, optimizer):
     print(f"Test Error:\n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}\n")
     return test_loss, 100*correct
 
-arrTrain = np.empty((2, num_epochs)) #test on the same dataset as trianing -> 100% to overfit
-arr_id = np.empty((2, num_epochs))
-arr_ood = np.empty((2, num_epochs))
-arr = train(num_epochs, model, train_dataloader, loss_func, arrTrain, arr_id, arr_ood)
+arr = np.empty((3, num_epochs)) #test on the same dataset as trianing -> 100% to overfit
+arr = train(num_epochs, model, train_dataloader, loss_func, arr)
 #on training set
 test_loop(train_dataloader, model, loss_func, adam)
 #validatio set
 test_loop(test_id_dataloader, model, loss_func, adam)
 
 test_loop(test_ood_dataloader, model, loss_func, adam)
-
-#np.savetxt('lstm_csvForPlot/arrTrain.csv', arrTrain, delimiter=",")
-#np.savetxt('lstm_csvForPlot/arr_id.csv', arr_id, delimiter=",")
-#np.savetxt('lstm_csvForPlot/arr_ood.csv', arr_ood, delimiter=",")
+#np.savetxt('lstm_csvForPlot/random_test_ood.csv', arr, delimiter=',', header='train,valid,ood', comments='')
