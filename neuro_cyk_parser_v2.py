@@ -134,6 +134,10 @@ device = torch.device('cpu')
 
 base_folder = sys.argv[1]
 num_rules = int(sys.argv[2])
+if len(sys.argv) > 3:
+    epoch_count = int(sys.argv[3])
+else:
+    epoch_count = 10
 logfilename = f"ncykv2({num_rules} rules).csv"
 
 train_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "train")
@@ -150,7 +154,7 @@ with open(os.path.join(base_folder, logfilename), "w", newline='') as log:
     csv_writer = csv.writer(log)
     csv_writer.writerow(["valid", "train", "ood"])
 
-for epoch in range(10):
+for epoch in range(epoch_count):
     model.train()
     for sb, rb in tqdm.tqdm(dl_train):
         pred = torch.zeros(len(sb), 2, device=device)
@@ -164,6 +168,7 @@ for epoch in range(10):
             
     model.eval()
     with torch.no_grad():
+        torch.save(model.state_dict(), os.path.join(base_folder, f"chpt_{epoch}.pth"))
         acc_test = compute_and_log_accuracy(dl_test, "valid")
         acc_train = compute_and_log_accuracy(dl_train, "train")
         acc_ood = compute_and_log_accuracy(dl_test_ood, "ood")
