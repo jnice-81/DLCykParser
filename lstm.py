@@ -18,7 +18,7 @@ torch.backends.cudnn.deterministic = True
 
 batchsize = 25 # how many samples the network sees before it updates itself
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-path = "datasets/random/test_ood.json"
+path = "datasets/binary_tree/small.json"
 
 training_data = CFGDataset(path, "train")
 train_dataloader = DataLoader(dataset=training_data, batch_size=batchsize, shuffle=True)
@@ -35,7 +35,7 @@ input_dim = 200 #max length of sequence
 hidden_size = 512
 num_layers = 2
 num_classes = 2
-num_epochs = 500
+num_epochs = 200
 learning_rate = 0.002
 
 
@@ -151,4 +151,4 @@ test_loop(train_dataloader, model, loss_func, adam)
 test_loop(test_id_dataloader, model, loss_func, adam)
 
 test_loop(test_ood_dataloader, model, loss_func, adam)
-#np.savetxt('lstm_csvForPlot/random_test_ood.csv', arr, delimiter=',', header='train,valid,ood', comments='')
+np.savetxt('lstm_csvForPlot/lstm_binary_small.csv', arr, delimiter=',', header='train,valid,ood', comments='')
