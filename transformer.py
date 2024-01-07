@@ -71,7 +71,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # path = "test_dataset.json"
 # path = os.path.join("datasets", "random", "grammar3", "large_ds_inverse", "data.json")
-path = os.path.join("datasets", "binary_tree", "small.json")
+path = os.path.join("datasets", "binary_tree", "inverted_small.json")
 model = TransformerClassifier(input_size, d_model, num_classes, num_layers, nhead, dim_feedforward, dropout).to(device)
 
 training_data = CFGDataset(path, "train")
@@ -89,7 +89,7 @@ optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Output results
 # output_path = os.path.join("datasets", "random", "grammar3", "large_ds_inverse", "transformer.csv")
-output_path = os.path.join("datasets", "binary_tree", "transformer_small.csv.")
+output_path = os.path.join("datasets", "binary_tree", "transformer_inverted.csv.")
 with open(output_path, "w", newline='') as log:
     csv_writer = csv.writer(log)
     csv_writer.writerow(["valid", "train", "ood"])
