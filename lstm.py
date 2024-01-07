@@ -18,7 +18,7 @@ torch.backends.cudnn.deterministic = True
 
 batchsize = 25 # how many samples the network sees before it updates itself
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-path = "datasets/binary_tree/small.json"
+path = "datasets/random/grammar2/large_ds/data.json"
 
 training_data = CFGDataset(path, "train")
 train_dataloader = DataLoader(dataset=training_data, batch_size=batchsize, shuffle=True)
@@ -108,9 +108,9 @@ def train(num_epochs, model, train_dataloader, loss_func, arr):
                 _ , a_train = test_loop(train_dataloader, model, loss_func, adam)
                 _ , a_id = test_loop(test_id_dataloader, model, loss_func, adam)
                 _, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
-                arr[0][epoch] = a_train
-                arr[1][epoch] = a_id
-                arr[2][epoch] = a_ood
+                arr[epoch][0] = a_train
+                arr[epoch][1] = a_id
+                arr[epoch][2] = a_ood
 
 
         if(epoch > 1):
@@ -118,9 +118,9 @@ def train(num_epochs, model, train_dataloader, loss_func, arr):
             #for plots, to have accuracy after each epoch:
             _, a_id = test_loop(test_id_dataloader, model, loss_func, adam)
             _, a_ood = test_loop(test_ood_dataloader, model, loss_func, adam)
-            arr[0][epoch] = a_train
-            arr[1][epoch] = a_id
-            arr[2][epoch] = a_ood
+            arr[epoch][0] = a_train
+            arr[epoch][1] = a_id
+            arr[epoch][2] = a_ood
 
     return arr
 
@@ -143,7 +143,7 @@ def test_loop(dataloader, model, loss_func, optimizer):
     print(f"Test Error:\n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f}\n")
     return test_loss, 100*correct
 
-arr = np.empty((3, num_epochs)) #test on the same dataset as trianing -> 100% to overfit
+arr = np.empty((num_epochs, 3)) #test on the same dataset as trianing -> 100% to overfit
 arr = train(num_epochs, model, train_dataloader, loss_func, arr)
 #on training set
 test_loop(train_dataloader, model, loss_func, adam)
@@ -151,4 +151,4 @@ test_loop(train_dataloader, model, loss_func, adam)
 test_loop(test_id_dataloader, model, loss_func, adam)
 
 test_loop(test_ood_dataloader, model, loss_func, adam)
-np.savetxt('lstm_csvForPlot/lstm_binary_small.csv', arr, delimiter=',', header='train,valid,ood', comments='')
+np.savetxt('lstm_csvForPlot/lstm_random_grammar2_large.csv', arr, delimiter=',', header='train,valid,ood', comments='')
