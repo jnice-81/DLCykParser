@@ -7,6 +7,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import math
 import os
+import csv
 
 SEED = 2024
 torch.manual_seed(SEED)
@@ -60,21 +61,21 @@ class TransformerClassifier(nn.Module):
 
 # Hyperparameters
 input_size = 27 # 26 letters + <pad>
-d_model = 50
-dim_feedforward = 50
-nhead = 5
+d_model = 32
+dim_feedforward = 64
+nhead = 2
 num_classes = 2  # Binary classification (0 or 1)
-num_layers = 6
+num_layers = 2
 dropout = 0.1
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # path = "test_dataset.json"
-path = os.path.join("datasets", "random", "grammar1", "large_ds", "data.json")
-
+# path = os.path.join("datasets", "random", "grammar3", "large_ds_inverse", "data.json")
+path = os.path.join("datasets", "binary_tree", "small.json")
 model = TransformerClassifier(input_size, d_model, num_classes, num_layers, nhead, dim_feedforward, dropout).to(device)
 
 training_data = CFGDataset(path, "train")
-train_dataloader = DataLoader(dataset=training_data, batch_size=40, shuffle=True)
+train_dataloader = DataLoader(dataset=training_data, batch_size=25, shuffle=True)
 
 test_id_data = CFGDataset(path, "test_id")
 test_id_dataloader = DataLoader(dataset=test_id_data, batch_size=10, shuffle=True)
@@ -86,9 +87,16 @@ test_ood_dataloader = DataLoader(dataset=test_ood_data, batch_size=10, shuffle=T
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
+# Output results
+# output_path = os.path.join("datasets", "random", "grammar3", "large_ds_inverse", "transformer.csv")
+output_path = os.path.join("datasets", "binary_tree", "transformer_small.csv.")
+with open(output_path, "w", newline='') as log:
+    csv_writer = csv.writer(log)
+    csv_writer.writerow(["valid", "train", "ood"])
+
 # Training loop
 model.train()
-epochs = 8000
+epochs = 5000
 epoch_losses = []
 for epoch in range(epochs):
     batch_loss = []
@@ -106,6 +114,48 @@ for epoch in range(epochs):
     epoch_loss = sum(batch_loss) / len(batch_loss)
     epoch_losses.append(epoch_loss)
     print(f"Epoch [{epoch+1}/{epochs}], Loss: {epoch_loss:.4f}")
+
+    if epoch % 100 == 0 or epoch == epochs - 1:
+        # Test the model
+        model.eval()
+        correct = 0
+        with torch.no_grad():
+            for inputs, targets in train_dataloader:
+                inputs = inputs.to(device)
+                targets = targets.to(device)
+                
+                test_outputs = model(inputs)
+                predictions = torch.argmax(test_outputs, dim=1)
+                correct += (predictions == targets).sum().item()
+        acc_train = correct / len(training_data)
+
+        correct = 0
+        with torch.no_grad():
+            for inputs, targets in test_id_dataloader:
+                inputs = inputs.to(device)
+                targets = targets.to(device)
+                
+                test_outputs = model(inputs)
+                predictions = torch.argmax(test_outputs, dim=1)
+                correct += (predictions == targets).sum().item()
+        acc_test = correct / len(test_id_data)
+
+        correct = 0
+        with torch.no_grad():
+            for inputs, targets in test_ood_dataloader:
+                inputs = inputs.to(device)
+                targets = targets.to(device)
+                
+                test_outputs = model(inputs)
+                predictions = torch.argmax(test_outputs, dim=1)
+                correct += (predictions == targets).sum().item()
+
+        acc_ood = correct / len(test_ood_data)
+
+        
+        with open(output_path, "a", newline='') as log:
+            csv_writer = csv.writer(log)
+            csv_writer.writerow([acc_test, acc_train, acc_ood])
 
 # Plot the loss curve
 plt.plot(epoch_losses)
@@ -125,7 +175,7 @@ with torch.no_grad():
         predictions = torch.argmax(test_outputs, dim=1)
         correct += (predictions == targets).sum().item()
 
-print(f"Accuracy in training set: {correct / len(training_data)}")
+print(f"Accuracy in training set: {correct / len(training_data):.4f}")
 
 correct = 0
 with torch.no_grad():
@@ -137,7 +187,7 @@ with torch.no_grad():
         predictions = torch.argmax(test_outputs, dim=1)
         correct += (predictions == targets).sum().item()
 
-print(f"ID accuracy: {correct / len(test_id_data)}")
+print(f"ID accuracy: {correct / len(test_id_data):.4f}")
 
 # Test the model
 correct = 0
@@ -150,4 +200,4 @@ with torch.no_grad():
         predictions = torch.argmax(test_outputs, dim=1)
         correct += (predictions == targets).sum().item()
 
-print(f"OOD accuracy: {correct / len(test_ood_data)}")
+print(f"OOD accuracy: {correct / len(test_ood_data):.4f}")
