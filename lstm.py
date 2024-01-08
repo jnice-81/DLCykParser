@@ -1,14 +1,12 @@
 import os
 import torch
 import numpy as np 
-
+import sys
 from dataloader import CFGDataset
 from torch import nn, optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 from torch.autograd import Variable 
-
-
 
 
 SEED = 2024
@@ -18,7 +16,8 @@ torch.backends.cudnn.deterministic = True
 
 batchsize = 25 # how many samples the network sees before it updates itself
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-path = "datasets/random/grammar2/large_ds/data.json"
+base_folder = sys.argv[1]
+path = os.path.join(base_folder, "data.json")
 
 training_data = CFGDataset(path, "train")
 train_dataloader = DataLoader(dataset=training_data, batch_size=batchsize, shuffle=True)
@@ -151,4 +150,5 @@ test_loop(train_dataloader, model, loss_func, adam)
 test_loop(test_id_dataloader, model, loss_func, adam)
 
 test_loop(test_ood_dataloader, model, loss_func, adam)
-np.savetxt('lstm_csvForPlot/lstm_random_grammar2_large.csv', arr, delimiter=',', header='train,valid,ood', comments='')
+output_path = os.path.join(base_folder, "lstm.csv")
+np.savetxt(output_path, arr, delimiter=',', header='train,valid,ood', comments='')

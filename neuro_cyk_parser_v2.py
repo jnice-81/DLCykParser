@@ -140,9 +140,9 @@ else:
     epoch_count = 10
 logfilename = f"ncykv2({num_rules} rules).csv"
 
-train_ds = GrammarDataset(os.path.join(base_folder, "inverted_small.json"), "train")
-test_ds = GrammarDataset(os.path.join(base_folder, "inverted_small.json"), "test_id")
-ood_ds = GrammarDataset(os.path.join(base_folder, "inverted_small.json"), "test_ood")
+train_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "train")
+test_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "test_id")
+ood_ds = GrammarDataset(os.path.join(base_folder, "data.json"), "test_ood")
 dl_train = data.DataLoader(train_ds, 1, True)
 dl_test = data.DataLoader(test_ds, 1, True)
 dl_test_ood = data.DataLoader(ood_ds, 1, True)
