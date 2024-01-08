@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import math
 import os
 import csv
+import sys
 
 SEED = 2024
 torch.manual_seed(SEED)
@@ -69,9 +70,8 @@ num_layers = 2
 dropout = 0.1
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# path = "test_dataset.json"
-# path = os.path.join("datasets", "random", "grammar3", "large_ds_inverse", "data.json")
-path = os.path.join("datasets", "binary_tree", "inverted_small.json")
+base_folder = sys.argv[1]
+path = os.path.join(base_folder, "data.json")
 model = TransformerClassifier(input_size, d_model, num_classes, num_layers, nhead, dim_feedforward, dropout).to(device)
 
 training_data = CFGDataset(path, "train")
@@ -88,8 +88,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Output results
-# output_path = os.path.join("datasets", "random", "grammar3", "large_ds_inverse", "transformer.csv")
-output_path = os.path.join("datasets", "binary_tree", "transformer_inverted.csv.")
+output_path = os.path.join(base_folder, "transformer.csv.")
 with open(output_path, "w", newline='') as log:
     csv_writer = csv.writer(log)
     csv_writer.writerow(["valid", "train", "ood"])
